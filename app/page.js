@@ -1,4 +1,7 @@
 'use client'
+          setFilterPlan('')
+      if (filterPlan && r.payment_plan !== filterPlan) return false
+  const [filterPlan, setFilterPlan] = useState('')
 import { useState, useEffect, useMemo } from 'react'
 
 const PROGRAM_LABELS = {
@@ -239,6 +242,10 @@ export default function Dashboard() {
               <option value="">All Pharmacies</option>
               {(filterOptions.pharmacies || []).map(p => <option key={p}>{p}</option>)}
             </select>
+        <select style={styles.filterSelect} value={filterPlan} onChange={e => { setFilterPlan(e.target.value); setPage(0) }}>
+          <option value="">All Plans</option>
+          {[...new Set(data.map(r => r.payment_plan).filter(Boolean))].sort().map(p => <option key={p} value={p}>{p}</option>)}
+        </select>
           </>
         )}
         <button onClick={resetFilters} style={styles.resetBtn}>Reset All</button>
