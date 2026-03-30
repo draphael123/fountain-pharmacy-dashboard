@@ -1,7 +1,4 @@
 'use client'
-          setFilterPlan('')
-      if (filterPlan && r.payment_plan !== filterPlan) return false
-  const [filterPlan, setFilterPlan] = useState('')
 import { useState, useEffect, useMemo } from 'react'
 
 const PROGRAM_LABELS = {
@@ -9,6 +6,8 @@ const PROGRAM_LABELS = {
   HRT: 'HRT',
   'GLP/Other': 'GLP/Other',
 }
+
+const PLAN_OPTIONS = ['4wk', '8wk', '12wk', '48wk']
 
 function decodePharmacyData(raw) {
   if (Array.isArray(raw)) return raw
@@ -44,6 +43,7 @@ export default function Dashboard() {
   const [medFilter, setMedFilter] = useState('')
   const [pharmacyFilter, setPharmacyFilter] = useState('')
   const [search, setSearch] = useState('')
+  const [filterPlan, setFilterPlan] = useState('')
 
   const [activeTab, setActiveTab] = useState('catalog')
   const [page, setPage] = useState(0)
@@ -72,6 +72,7 @@ export default function Dashboard() {
     if (programFilter) f = f.filter(r => r.program === programFilter)
     if (medFilter) f = f.filter(r => r.medication === medFilter)
     if (pharmacyFilter) f = f.filter(r => r.pharmacy === pharmacyFilter)
+    if (filterPlan) f = f.filter(r => r.payment_plan === filterPlan)
     if (search) {
       const s = search.toLowerCase()
       f = f.filter(r =>
@@ -82,7 +83,7 @@ export default function Dashboard() {
       )
     }
     return f
-  }, [data, stateFilter, sexFilter, programFilter, medFilter, pharmacyFilter, search])
+  }, [data, stateFilter, sexFilter, programFilter, medFilter, pharmacyFilter, search, filterPlan])
 
   const pagedData = useMemo(() => {
     return filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE)
@@ -118,6 +119,7 @@ export default function Dashboard() {
     setProgramFilter('')
     setMedFilter('')
     setPharmacyFilter('')
+    setFilterPlan('')
     setSearch('')
     setPage(0)
   }
@@ -242,10 +244,10 @@ export default function Dashboard() {
               <option value="">All Pharmacies</option>
               {(filterOptions.pharmacies || []).map(p => <option key={p}>{p}</option>)}
             </select>
-        <select style={styles.filterSelect} value={filterPlan} onChange={e => { setFilterPlan(e.target.value); setPage(0) }}>
-          <option value="">All Plans</option>
-          {[...new Set(data.map(r => r.payment_plan).filter(Boolean))].sort().map(p => <option key={p} value={p}>{p}</option>)}
-        </select>
+          <select style={styles.filterSelect} value={filterPlan} onChange={e => { setFilterPlan(e.target.value); setPage(0) }}>
+            <option value="">All Plans</option>
+            {PLAN_OPTIONS.map(p => <option key={p} value={p}>{p}</option>)}
+          </select>
           </>
         )}
         <button onClick={resetFilters} style={styles.resetBtn}>Reset All</button>
