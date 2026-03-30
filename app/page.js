@@ -32,7 +32,7 @@ function decodePharmacyData(raw) {
 
 export default function Dashboard() {
   const [data, setData] = useState([])
-  // routing variations computed below
+  // routing variations computed from data
   const [summary, setSummary] = useState(null)
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState(null)
@@ -56,7 +56,7 @@ export default function Dashboard() {
       fetch('/summary.json').then(r => r.json()),
     ]).then(([dRes, dispRes, sRes]) => {
       if (dRes.status === 'fulfilled') setData(decodePharmacyData(dRes.value))
-      // disparities now computed from data
+      // routing variations computed below
       if (sRes.status === 'fulfilled') setSummary(sRes.value)
       setLoading(false)
     }).catch(e => {
@@ -105,38 +105,34 @@ export default function Dashboard() {
 
   const routingVariations = useMemo(() => {
     if (!data.length) return []
-    // Group by medication+drug+dosage+sex+payment_plan, find where pharmacy differs by state
     const combos = {}
     for (const r of data) {
       const key = [r.medication, r.drug, r.dosage, r.frequency, r.sex, r.payment_plan].join('|')
       if (!combos[key]) combos[key] = { medication: r.medication, drug: r.drug, dosage: r.dosage, frequency: r.frequency, sex: r.sex, payment_plan: r.payment_plan, byState: {} }
-      if (!combos[key].byState[r.state]) combos[key].byState[r.state] = new Set()
-      combos[key].byState[r.state].add(r.pharmacy)
+      const stPharms = combos[key].byState[r.state]
+      if (!stPharms) combos[key].byState[r.state] = [r.pharmacy]
+      else if (!stPharms.includes(r.pharmacy)) stPharms.push(r.pharmacy)
     }
     const variations = []
     for (const c of Object.values(combos)) {
       const pharmSets = {}
       for (const [st, pharms] of Object.entries(c.byState)) {
-        const key = [...pharms].sort().join(',')
+        const key = pharms.slice().sort().join(',')
         if (!pharmSets[key]) pharmSets[key] = []
         pharmSets[key].push(st)
       }
       if (Object.keys(pharmSets).length > 1) {
         variations.push({
-          medication: c.medication,
-          drug: c.drug,
-          dosage: c.dosage,
-          frequency: c.frequency,
-          sex: c.sex,
-          payment_plan: c.payment_plan,
-          routes: Object.entries(pharmSets).map(([pharms, states]) => ({ pharmacies: pharms, states: states.sort(), count: states.length }))
+          medication: c.medication, drug: c.drug, dosage: c.dosage,
+          frequency: c.frequency, sex: c.sex, payment_plan: c.payment_plan,
+          routes: Object.entries(pharmSets).map(function(e) { return { pharmacies: e[0], states: e[1].sort(), count: e[1].length } })
         })
       }
     }
     let v = variations
     if (search) {
       const s = search.toLowerCase()
-      v = v.filter(r => r.drug.toLowerCase().includes(s) || r.medication.toLowerCase().includes(s) || r.dosage.toLowerCase().includes(s))
+      v = v.filter(function(r) { return r.drug.toLowerCase().includes(s) || r.medication.toLowerCase().includes(s) || r.dosage.toLowerCase().includes(s) })
     }
     return v
   }, [data, search])
@@ -174,7 +170,7 @@ export default function Dashboard() {
           <div style={styles.headerMeta}>
             <span style={styles.badge}>{summary?.scrape_date}</span>
             <span style={styles.badgeGreen}>{data.length.toLocaleString()} records</span>
-            <span style={styles.badgeAmber}>{routingVariations.length} routing variations</span>
+            <span style={styles.badgeAmber}>{routingVariations.length} variations</span>
           </div>
         </div>
       </header>
@@ -322,32 +318,34 @@ export default function Dashboard() {
         </div>
       )}
 
-      {activeTab === 'variations' && (
-        <div style={styles.tableWrap}>
-          <div style={styles.resultCount}>{routingVariations.length} routing variation{routingVariations.length !== 1 ? "s" : ""} found</div>
-          {routingVariations.length === 0 && <p style={{ color: "#94a3b8", padding: 16 }}>No medications are routed to different pharmacies depending on state. All pharmacy assignments are consistent.</p>}
-          {routingVariations.map((v, i) => (
-            <div key={i} style={styles.dispCard}>
-              <div style={styles.dispHeader}>
-                <span style={styles.dispDrug}>{v.drug} \u2014 {v.dosage}</span>
-                <span style={styles.dispMeta}>{v.sex} \u00B7 {v.payment_plan || "no plan"} \u00B7 {v.frequency}</span>
-              </div>
-              <div style={styles.dispTypes}>
-                <span style={styles.dispBadge}>pharmacy varies by state</span>
-              </div>
-              <div style={styles.dispDetails}>
-                {v.routes.map((route, j) => (
-                  <div key={j} style={styles.dispGroup}>
-                    <div style={styles.dispGroupVals}>
-                      <span style={styles.dispKV}><strong>Pharmacy:</strong> {route.pharmacies}</span>
-                      <span style={styles.dispKV}><strong>States:</strong> {route.count}</span>
+        {activeTab === 'variations' && (
+          <div style={styles.tableWrap}>
+            <div style={styles.resultCount}>{routingVariations.length} routing variation{routingVariations.length !== 1 ? "s" : ""} found</div>
+            {routingVariations.length === 0 && <p style={{ color: "#94a3b8", padding: 16 }}>All pharmacy assignments are consistent across states.</p>}
+            {routingVariations.map((v, i) => (
+              <div key={i} style={styles.dispCard}>
+                <div style={styles.dispHeader}>
+                  <span style={styles.dispDrug}>{v.drug} \u2014 {v.dosage}</span>
+                  <span style={styles.dispMeta}>{v.sex} \u00B7 {v.payment_plan || "no plan"} \u00B7 {v.frequency}</span>
+                </div>
+                <div style={styles.dispTypes}>
+                  <span style={styles.dispBadge}>pharmacy varies by state</span>
+                </div>
+                <div style={styles.dispDetails}>
+                  {v.routes.map((route, j) => (
+                    <div key={j} style={styles.dispGroup}>
+                      <div style={styles.dispGroupVals}>
+                        <span style={styles.dispKV}><strong>Pharmacy:</strong> {route.pharmacies}</span>
+                        <span style={styles.dispKV}><strong>States:</strong> {route.count}</span>
+                      </div>
+                      <div style={styles.dispStates}>{route.states.join(", ")}</div>
                     </div>
-                    <div style={styles.dispStates}>{route.states.join(", ")}</div>
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
-            </div>
-          ))}
+            ))}
+          </div>
+        )}
 
       {activeTab === 'summary' && summary && (
         <div style={styles.summaryWrap}>
