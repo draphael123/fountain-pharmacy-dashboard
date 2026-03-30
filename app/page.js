@@ -8,6 +8,7 @@ const PROGRAM_LABELS = {
 }
 
 const PLAN_OPTIONS = ['4wk', '8wk', '12wk', '48wk']
+const SORT_KEYS = ['sex','program','medication','drug','dosage','frequency','pharmacy','med_code','supply_code','payment_plan']
 
 function decodePharmacyData(raw) {
   if (Array.isArray(raw)) return raw
