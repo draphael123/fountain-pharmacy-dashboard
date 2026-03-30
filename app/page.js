@@ -36,12 +36,14 @@ export default function Dashboard() {
   const [summary, setSummary] = useState(null)
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState(null)
+  const [changelog, setChangelog] = useState(null)
 
     const [sexFilter, setSexFilter] = useState('')
   const [programFilter, setProgramFilter] = useState('')
   const [medFilter, setMedFilter] = useState('')
   const [pharmacyFilter, setPharmacyFilter] = useState('')
   const [search, setSearch] = useState('')
+  const [showSuggestions, setShowSuggestions] = useState(false)
   const [filterPlan, setFilterPlan] = useState('')
 
   const [activeTab, setActiveTab] = useState('catalog')
@@ -52,10 +54,12 @@ export default function Dashboard() {
     Promise.allSettled([
       fetch('/pharmacy_data.json').then(r => r.json()),
       Promise.resolve([]),
+      fetch('/changelog.json').then(r => r.ok ? r.json() : null).catch(() => null),
       fetch('/summary.json').then(r => r.json()),
     ]).then(([dRes, dispRes, sRes]) => {
       if (dRes.status === 'fulfilled') setData(decodePharmacyData(dRes.value))
       // routing variations computed below
+      if (clRes && clRes.status === 'fulfilled' && clRes.value) setChangelog(clRes.value)
       if (sRes.status === 'fulfilled') setSummary(sRes.value)
       setLoading(false)
     }).catch(e => {
@@ -106,6 +110,53 @@ export default function Dashboard() {
     return { programs, meds, pharmacies }
   }, [data, sexFilter, programFilter])
 
+  const searchSuggestions = useMemo(() => {
+    if (!search || search.length < 2) return []
+    const s = search.toLowerCase()
+    const seen = new Set()
+    const results = []
+    for (const r of data) {
+      for (const val of [r.medication, r.drug, r.med_code, r.dosage]) {
+        if (val && val.toLowerCase().includes(s) && !seen.has(val)) {
+          seen.add(val)
+          results.push(val)
+          if (results.length >= 8) return results
+        }
+      }
+    }
+    return results
+  }, [data, search])
+
+  const formularyCompare = useMemo(() => {
+    if (!data.length) return []
+    const medMap = {}
+    for (const r of data) {
+      const key = r.medication + '|' + r.drug + '|' + r.dosage
+      if (!medMap[key]) medMap[key] = { medication: r.medication, drug: r.drug, dosage: r.dosage, frequency: r.frequency, pharmacies: {} }
+      medMap[key].pharmacies[r.pharmacy] = true
+    }
+    const allPharms = Array.from(new Set(data.map(function(r) { return r.pharmacy }).filter(Boolean))).sort()
+    return { meds: Object.values(medMap).sort(function(a,b) { return a.medication.localeCompare(b.medication) }), pharmacies: allPharms }
+  }, [data])
+
+  const pharmacyStats = useMemo(() => {
+    if (!data.length) return []
+    const stats = {}
+    for (const r of data) {
+      const p = r.pharmacy
+      if (!p) continue
+      if (!stats[p]) stats[p] = { name: p, meds: new Set(), programs: new Set(), plans: new Set(), records: 0, states: new Set() }
+      stats[p].meds.add(r.medication)
+      stats[p].programs.add(r.program)
+      stats[p].plans.add(r.payment_plan)
+      stats[p].states.add(r.state)
+      stats[p].records++
+    }
+    return Object.values(stats).map(function(s) {
+      return { name: s.name, meds: s.meds.size, programs: Array.from(s.programs).sort(), plans: Array.from(s.plans).filter(Boolean).sort(), records: s.records, states: s.states.size }
+    }).sort(function(a, b) { return b.records - a.records })
+  }, [data])
+
   const routingVariations = useMemo(() => {
     if (!data.length) return []
     const combos = {}
@@ -148,6 +199,19 @@ export default function Dashboard() {
     setFilterPlan('')
     setSearch('')
     setPage(0)
+  }
+
+  function exportCSV() {
+    const headers = ['Sex','Program','Medication','Drug','Dosage','Freq','Pharmacy','Med Code','Supply Code','Plan']
+    const rows = filtered.map(r => [r.sex, r.program, r.medication, r.drug, r.dosage, r.frequency, r.pharmacy, r.med_code, r.supply_code, r.payment_plan].map(v => '"' + (v || '').replace(/"/g, '""') + '"').join(','))
+    const csv = [headers.join(','), ...rows].join('\n')
+    const blob = new Blob([csv], { type: 'text/csv' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'fountain_pharmacy_catalog.csv'
+    a.click()
+    URL.revokeObjectURL(url)
   }
 
   if (loading) {
@@ -237,16 +301,39 @@ export default function Dashboard() {
         >
           Summary
         </button>
+        <button
+          style={activeTab === 'formulary' ? styles.tabActive : styles.tab}
+          onClick={() => setActiveTab('formulary')}
+        >
+          Formulary
+        </button>
+        <button
+          style={activeTab === 'changelog' ? styles.tabActive : styles.tab}
+          onClick={() => setActiveTab('changelog')}
+        >
+          Change Log
+        </button>
       </div>
 
       <div style={styles.filterBar}>
-        <input
-          type="text"
-          placeholder="Search drugs, meds, codes, dosages..."
-          value={search}
-          onChange={e => { setSearch(e.target.value); setPage(0) }}
-          style={styles.searchInput}
-        />
+        <div style={{ position: "relative", flex: 1 }}>
+          <input
+            type="text"
+            placeholder="Search drugs, meds, codes, dosages..."
+            value={search}
+            onChange={e => { setSearch(e.target.value); setPage(0); setShowSuggestions(true) }}
+            onFocus={() => setShowSuggestions(true)}
+            onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
+            style={styles.searchInput}
+          />
+          {showSuggestions && searchSuggestions.length > 0 && (
+            <div style={styles.suggestBox}>
+              {searchSuggestions.map((s, i) => (
+                <div key={i} style={styles.suggestItem} onMouseDown={() => { setSearch(s); setShowSuggestions(false); setPage(0) }}>{s}</div>
+              ))}
+            </div>
+          )}
+        </div>
         
         <select value={sexFilter} onChange={e => { setSexFilter(e.target.value); setPage(0) }} style={styles.select}>
           <option value="">All Sexes</option>
@@ -274,6 +361,7 @@ export default function Dashboard() {
           </>
         )}
         <button onClick={resetFilters} style={styles.resetBtn}>Reset All</button>
+          <button onClick={exportCSV} style={styles.exportBtn}>Export CSV</button>
       </div>
 
       {activeTab === 'catalog' && (
@@ -342,6 +430,69 @@ export default function Dashboard() {
           </div>
         )}
 
+        {activeTab === 'formulary' && (
+          <div style={styles.tableWrap}>
+            <div style={styles.resultCount}>{formularyCompare.meds.length} unique medication/dosage combinations</div>
+            <div style={{ overflowX: 'auto' }}>
+              <table style={styles.table}>
+                <thead>
+                  <tr>
+                    <th style={styles.th}>Medication</th>
+                    <th style={styles.th}>Drug</th>
+                    <th style={styles.th}>Dosage</th>
+                    <th style={styles.th}>Freq</th>
+                    {formularyCompare.pharmacies.map(p => <th key={p} style={styles.th}>{p}</th>)}
+                  </tr>
+                </thead>
+                <tbody>
+                  {formularyCompare.meds.map((m, i) => (
+                    <tr key={i} style={i % 2 === 0 ? styles.rowEven : styles.rowOdd}>
+                      <td style={styles.td}>{m.medication}</td>
+                      <td style={styles.td}>{m.drug}</td>
+                      <td style={styles.td}>{m.dosage}</td>
+                      <td style={styles.td}>{m.frequency}</td>
+                      {formularyCompare.pharmacies.map(p => (
+                        <td key={p} style={{ ...styles.td, textAlign: "center", fontSize: 16 }}>
+                          {m.pharmacies[p] ? <span style={{ color: "#22c55e" }}>Yes</span> : <span style={{ color: "#475569" }}>&mdash;</span>}
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'changelog' && (
+          <div style={styles.tableWrap}>
+            <div style={styles.resultCount}>Formulary Change Log</div>
+            {!changelog ? (
+              <div style={{ padding: 32, textAlign: "center" }}>
+                <p style={{ color: "#94a3b8", fontSize: 15, marginBottom: 8 }}>No previous snapshots available yet.</p>
+                <p style={{ color: "#64748b", fontSize: 13 }}>After the next EHR scrape, changes will be tracked automatically: new medications added, medications removed, pharmacy routing changes, and dosage updates.</p>
+              </div>
+            ) : (
+              <div>
+                {changelog.entries.map((entry, i) => (
+                  <div key={i} style={{ background: "#1e293b", borderRadius: 10, padding: 16, marginBottom: 12, border: "1px solid #334155" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 10 }}>
+                      <span style={{ color: "#f1f5f9", fontWeight: 600 }}>{entry.date}</span>
+                      <span style={{ color: "#94a3b8", fontSize: 13 }}>{entry.summary}</span>
+                    </div>
+                    {entry.changes.map((c, j) => (
+                      <div key={j} style={{ padding: "4px 0", borderTop: "1px solid #0f172a", display: "flex", gap: 10, alignItems: "center" }}>
+                        <span style={{ background: c.type === "added" ? "#166534" : c.type === "removed" ? "#991b1b" : "#92400e", color: "#fff", padding: "1px 8px", borderRadius: 4, fontSize: 11, fontWeight: 600, minWidth: 60, textAlign: "center" }}>{c.type}</span>
+                        <span style={{ color: "#e2e8f0", fontSize: 13 }}>{c.description}</span>
+                      </div>
+                    ))}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
       {activeTab === 'summary' && summary && (
         <div style={styles.summaryWrap}>
           <div style={styles.summarySection}>
@@ -366,6 +517,29 @@ export default function Dashboard() {
             <h3 style={styles.summaryTitle}>Pharmacies ({summary.pharmacies?.length})</h3>
             <div style={styles.tagWrap}>
               {(summary.pharmacies || []).map(p => <span key={p} style={styles.tagAmber}>{p}</span>)}
+            </div>
+          </div>
+          <div style={{ marginTop: 24 }}>
+            <h3 style={styles.summaryTitle}>Pharmacy Details</h3>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 16 }}>
+              {pharmacyStats.map(p => (
+                <div key={p.name} style={{ background: "#0f172a", borderRadius: 10, padding: 16, border: "1px solid #1e293b" }}>
+                  <div style={{ fontSize: 18, fontWeight: 700, color: "#f1f5f9", marginBottom: 10 }}>{p.name}</div>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 10 }}>
+                    <div style={{ color: "#94a3b8", fontSize: 13 }}>Medications: <strong style={{ color: "#e2e8f0" }}>{p.meds}</strong></div>
+                    <div style={{ color: "#94a3b8", fontSize: 13 }}>States: <strong style={{ color: "#e2e8f0" }}>{p.states}</strong></div>
+                    <div style={{ color: "#94a3b8", fontSize: 13 }}>Records: <strong style={{ color: "#e2e8f0" }}>{p.records.toLocaleString()}</strong></div>
+                  </div>
+                  <div style={{ marginBottom: 6 }}>
+                    <span style={{ color: "#94a3b8", fontSize: 12 }}>Programs: </span>
+                    {p.programs.map(pr => <span key={pr} style={styles.tagBlue}>{pr}</span>)}
+                  </div>
+                  <div>
+                    <span style={{ color: "#94a3b8", fontSize: 12 }}>Plans: </span>
+                    {p.plans.map(pl => <span key={pl} style={styles.tag}>{pl}</span>)}
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
         </div>
