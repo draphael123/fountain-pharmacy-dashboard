@@ -164,7 +164,7 @@ export default function Dashboard() {
         <h2 style={styles.infoTitle}>How This Dashboard Works</h2>
         <div style={styles.infoGrid}>
           <div style={styles.infoCard}>
-            <div style={styles.infoIcon}>ð</div>
+            <div style={styles.infoIcon}>[1]</div>
             <h3 style={styles.infoCardTitle}>Medication Catalog</h3>
             <p style={styles.infoCardText}>
               Browse every medication, dosage, and pharmacy combination available in the Fountain EHR portal.
@@ -173,7 +173,7 @@ export default function Dashboard() {
             </p>
           </div>
           <div style={styles.infoCard}>
-            <div style={styles.infoIcon}>â ï¸</div>
+            <div style={styles.infoIcon}>[2]</div>
             <h3 style={styles.infoCardTitle}>Disparity Analysis</h3>
             <p style={styles.infoCardText}>
               Identifies medications where the pharmacy, med code, or supply code differs across states
@@ -182,7 +182,7 @@ export default function Dashboard() {
             </p>
           </div>
           <div style={styles.infoCard}>
-            <div style={styles.infoIcon}>ð</div>
+            <div style={styles.infoIcon}>[3]</div>
             <h3 style={styles.infoCardTitle}>Filters &amp; Search</h3>
             <p style={styles.infoCardText}>
               Use the dropdowns to narrow by state, sex, program type, specific medication, or pharmacy.
@@ -289,11 +289,11 @@ export default function Dashboard() {
           </table>
           {totalPages > 1 && (
             <div style={styles.pagination}>
-              <button style={styles.pageBtn} disabled={page === 0} onClick={() => setPage(0)}>â®</button>
-              <button style={styles.pageBtn} disabled={page === 0} onClick={() => setPage(p => p - 1)}>â</button>
+              <button style={styles.pageBtn} disabled={page === 0} onClick={() => setPage(0)}>&laquo; First</button>
+              <button style={styles.pageBtn} disabled={page === 0} onClick={() => setPage(p => p - 1)}>&lsaquo; Prev</button>
               <span style={styles.pageInfo}>Page {page + 1} of {totalPages}</span>
-              <button style={styles.pageBtn} disabled={page >= totalPages - 1} onClick={() => setPage(p => p + 1)}>â¶</button>
-              <button style={styles.pageBtn} disabled={page >= totalPages - 1} onClick={() => setPage(totalPages - 1)}>â­</button>
+              <button style={styles.pageBtn} disabled={page >= totalPages - 1} onClick={() => setPage(p => p + 1)}>Next &rsaquo;</button>
+              <button style={styles.pageBtn} disabled={page >= totalPages - 1} onClick={() => setPage(totalPages - 1)}>Last &raquo;</button>
             </div>
           )}
         </div>
