@@ -321,24 +321,21 @@ export default function Dashboard() {
         {activeTab === 'variations' && (
           <div style={styles.tableWrap}>
             <div style={styles.resultCount}>{routingVariations.length} routing variation{routingVariations.length !== 1 ? "s" : ""} found</div>
-            {routingVariations.length === 0 && <p style={{ color: "#94a3b8", padding: 16 }}>All pharmacy assignments are consistent across states.</p>}
+            {routingVariations.length === 0 && <p style={{ color: "#94a3b8", padding: 16 }}>All pharmacy assignments are consistent across states. No medications are routed differently by state.</p>}
             {routingVariations.map((v, i) => (
-              <div key={i} style={styles.dispCard}>
-                <div style={styles.dispHeader}>
-                  <span style={styles.dispDrug}>{v.drug} \u2014 {v.dosage}</span>
-                  <span style={styles.dispMeta}>{v.sex} \u00B7 {v.payment_plan || "no plan"} \u00B7 {v.frequency}</span>
+              <div key={i} style={{ background: "#1e293b", borderRadius: 12, padding: 20, marginBottom: 16, border: "1px solid #334155" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+                  <span style={{ color: "#f1f5f9", fontWeight: 600, fontSize: 16 }}>{v.medication}</span>
+                  <span style={{ color: "#94a3b8", fontSize: 13 }}>{v.drug} | {v.dosage} | {v.frequency} | {v.sex} | {v.payment_plan || "no plan"}</span>
                 </div>
-                <div style={styles.dispTypes}>
-                  <span style={styles.dispBadge}>pharmacy varies by state</span>
-                </div>
-                <div style={styles.dispDetails}>
+                <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
                   {v.routes.map((route, j) => (
-                    <div key={j} style={styles.dispGroup}>
-                      <div style={styles.dispGroupVals}>
-                        <span style={styles.dispKV}><strong>Pharmacy:</strong> {route.pharmacies}</span>
-                        <span style={styles.dispKV}><strong>States:</strong> {route.count}</span>
+                    <div key={j} style={{ background: "#0f172a", borderRadius: 8, padding: 14, border: "1px solid #1e293b" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                        <span style={{ background: j === 0 ? "#166534" : "#92400e", color: "#fff", padding: "2px 10px", borderRadius: 6, fontSize: 12, fontWeight: 600 }}>{route.pharmacies}</span>
+                        <span style={{ color: "#94a3b8", fontSize: 13 }}>{route.count} state{route.count !== 1 ? "s" : ""}</span>
                       </div>
-                      <div style={styles.dispStates}>{route.states.join(", ")}</div>
+                      <div style={{ color: "#cbd5e1", fontSize: 13, lineHeight: 1.5 }}>{route.states.join(", ")}</div>
                     </div>
                   ))}
                 </div>
