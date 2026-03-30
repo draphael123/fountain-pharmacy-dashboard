@@ -32,7 +32,7 @@ function decodePharmacyData(raw) {
 
 export default function Dashboard() {
   const [data, setData] = useState([])
-  const [disparities, setDisparities] = useState([])
+  // routing variations computed below
   const [summary, setSummary] = useState(null)
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState(null)
@@ -52,11 +52,11 @@ export default function Dashboard() {
   useEffect(() => {
     Promise.allSettled([
       fetch('/pharmacy_data.json').then(r => r.json()),
-      fetch('/disparities.json').then(r => r.json()),
+      Promise.resolve([]),
       fetch('/summary.json').then(r => r.json()),
     ]).then(([dRes, dispRes, sRes]) => {
       if (dRes.status === 'fulfilled') setData(decodePharmacyData(dRes.value))
-      if (dispRes.status === 'fulfilled') setDisparities(dispRes.value)
+      // disparities now computed from data
       if (sRes.status === 'fulfilled') setSummary(sRes.value)
       setLoading(false)
     }).catch(e => {
@@ -103,15 +103,43 @@ export default function Dashboard() {
     return { states, programs, meds, pharmacies }
   }, [data, stateFilter, sexFilter, programFilter])
 
-  const filteredDisparities = useMemo(() => {
-    let d = disparities
-    if (sexFilter) d = d.filter(r => r.sex === sexFilter)
+  const routingVariations = useMemo(() => {
+    if (!data.length) return []
+    // Group by medication+drug+dosage+sex+payment_plan, find where pharmacy differs by state
+    const combos = {}
+    for (const r of data) {
+      const key = [r.medication, r.drug, r.dosage, r.frequency, r.sex, r.payment_plan].join('|')
+      if (!combos[key]) combos[key] = { medication: r.medication, drug: r.drug, dosage: r.dosage, frequency: r.frequency, sex: r.sex, payment_plan: r.payment_plan, byState: {} }
+      if (!combos[key].byState[r.state]) combos[key].byState[r.state] = new Set()
+      combos[key].byState[r.state].add(r.pharmacy)
+    }
+    const variations = []
+    for (const c of Object.values(combos)) {
+      const pharmSets = {}
+      for (const [st, pharms] of Object.entries(c.byState)) {
+        const key = [...pharms].sort().join(',')
+        if (!pharmSets[key]) pharmSets[key] = []
+        pharmSets[key].push(st)
+      }
+      if (Object.keys(pharmSets).length > 1) {
+        variations.push({
+          medication: c.medication,
+          drug: c.drug,
+          dosage: c.dosage,
+          frequency: c.frequency,
+          sex: c.sex,
+          payment_plan: c.payment_plan,
+          routes: Object.entries(pharmSets).map(([pharms, states]) => ({ pharmacies: pharms, states: states.sort(), count: states.length }))
+        })
+      }
+    }
+    let v = variations
     if (search) {
       const s = search.toLowerCase()
-      d = d.filter(r => r.drug.toLowerCase().includes(s) || r.dosage.toLowerCase().includes(s))
+      v = v.filter(r => r.drug.toLowerCase().includes(s) || r.medication.toLowerCase().includes(s) || r.dosage.toLowerCase().includes(s))
     }
-    return d
-  }, [disparities, sexFilter, search])
+    return v
+  }, [data, search])
 
   function resetFilters() {
     setStateFilter('')
@@ -140,13 +168,13 @@ export default function Dashboard() {
           <div>
             <h1 style={styles.title}>Fountain Pharmacy Dashboard</h1>
             <p style={styles.subtitle}>
-              Medication catalog, pharmacy routing, and state-by-state disparity analysis
+              Medication catalog, pharmacy routing, and state-by-state variation analysis
             </p>
           </div>
           <div style={styles.headerMeta}>
             <span style={styles.badge}>{summary?.scrape_date}</span>
             <span style={styles.badgeGreen}>{data.length.toLocaleString()} records</span>
-            <span style={styles.badgeAmber}>{disparities.length} disparities</span>
+            <span style={styles.badgeAmber}>{routingVariations.length} routing variations</span>
           </div>
         </div>
       </header>
@@ -165,7 +193,7 @@ export default function Dashboard() {
           </div>
           <div style={styles.infoCard}>
             <div style={styles.infoIcon}>[2]</div>
-            <h3 style={styles.infoCardTitle}>Disparity Analysis</h3>
+            <h3 style={styles.infoCardTitle}>Routing Variations</h3>
             <p style={styles.infoCardText}>
               Identifies medications where the pharmacy, med code, or supply code differs across states
               for the same drug + dosage + plan. This helps catch inconsistencies in routing, billing codes,
@@ -189,7 +217,7 @@ export default function Dashboard() {
         <StatCard label="Programs" value={summary?.programs?.length || 0} />
         <StatCard label="Medications" value={summary?.medications?.length || 0} />
         <StatCard label="Pharmacies" value={summary?.pharmacies?.length || 0} />
-        <StatCard label="Disparities" value={disparities.length} alert />
+        <StatCard label="Variations" value={routingVariations.length} alert />
       </section>
 
       <div style={styles.tabRow}>
@@ -200,10 +228,10 @@ export default function Dashboard() {
           Medication Catalog
         </button>
         <button
-          style={activeTab === 'disparities' ? styles.tabActive : styles.tab}
-          onClick={() => { setActiveTab('disparities'); setPage(0) }}
+          style={activeTab === 'variations' ? styles.tabActive : styles.tab}
+          onClick={() => { setActiveTab('variations'); setPage(0) }}
         >
-          Disparity Analysis ({filteredDisparities.length})
+          Routing Variations ({routingVariations.length})
         </button>
         <button
           style={activeTab === 'summary' ? styles.tabActive : styles.tab}
@@ -294,36 +322,32 @@ export default function Dashboard() {
         </div>
       )}
 
-      {activeTab === 'disparities' && (
+      {activeTab === 'variations' && (
         <div style={styles.tableWrap}>
-          <div style={styles.resultCount}>{filteredDisparities.length} disparities found</div>
-          {filteredDisparities.map((d, i) => (
+          <div style={styles.resultCount}>{routingVariations.length} routing variation{routingVariations.length !== 1 ? "s" : ""} found</div>
+          {routingVariations.length === 0 && <p style={{ color: "#94a3b8", padding: 16 }}>No medications are routed to different pharmacies depending on state. All pharmacy assignments are consistent.</p>}
+          {routingVariations.map((v, i) => (
             <div key={i} style={styles.dispCard}>
               <div style={styles.dispHeader}>
-                <span style={styles.dispDrug}>{d.drug} â {d.dosage}</span>
-                <span style={styles.dispMeta}>{d.sex} Â· {d.payment_plan} plan Â· {d.state_count} states</span>
+                <span style={styles.dispDrug}>{v.drug} \u2014 {v.dosage}</span>
+                <span style={styles.dispMeta}>{v.sex} \u00B7 {v.payment_plan || "no plan"} \u00B7 {v.frequency}</span>
               </div>
               <div style={styles.dispTypes}>
-                {d.disparity_types.map(t => (
-                  <span key={t} style={styles.dispBadge}>{t.replace('_', ' ')}</span>
-                ))}
+                <span style={styles.dispBadge}>pharmacy varies by state</span>
               </div>
               <div style={styles.dispDetails}>
-                {d.state_groups && d.state_groups.map((sg, j) => (
+                {v.routes.map((route, j) => (
                   <div key={j} style={styles.dispGroup}>
                     <div style={styles.dispGroupVals}>
-                      {Object.entries(sg.values).map(([k, v]) => (
-                        <span key={k} style={styles.dispKV}><strong>{k}:</strong> {v}</span>
-                      ))}
+                      <span style={styles.dispKV}><strong>Pharmacy:</strong> {route.pharmacies}</span>
+                      <span style={styles.dispKV}><strong>States:</strong> {route.count}</span>
                     </div>
-                    <div style={styles.dispStates}>{sg.states.join(', ')}</div>
+                    <div style={styles.dispStates}>{route.states.join(", ")}</div>
                   </div>
                 ))}
               </div>
             </div>
           ))}
-        </div>
-      )}
 
       {activeTab === 'summary' && summary && (
         <div style={styles.summaryWrap}>
