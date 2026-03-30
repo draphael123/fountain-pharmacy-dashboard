@@ -110,6 +110,21 @@ export default function Dashboard() {
     return { programs, meds, pharmacies }
   }, [data, sexFilter, programFilter])
 
+  const liveStats = useMemo(() => {
+    if (!data.length) return { states: 0, programs: 0, medications: 0, pharmacies: 0 }
+    const states = new Set()
+    const programs = new Set()
+    const medications = new Set()
+    const pharmacies = new Set()
+    for (const r of data) {
+      if (r.state) states.add(r.state)
+      if (r.program) programs.add(r.program)
+      if (r.medication) medications.add(r.medication)
+      if (r.pharmacy) pharmacies.add(r.pharmacy)
+    }
+    return { states: states.size, programs: programs.size, medications: medications.size, pharmacies: pharmacies.size }
+  }, [data])
+
   const searchSuggestions = useMemo(() => {
     if (!search || search.length < 2) return []
     const s = search.toLowerCase()
@@ -234,9 +249,6 @@ export default function Dashboard() {
             </p>
           </div>
           <div style={styles.headerMeta}>
-            <span style={styles.badge}>{summary?.scrape_date}</span>
-            <span style={styles.badgeGreen}>{data.length.toLocaleString()} records</span>
-            <span style={styles.badgeAmber}>{routingVariations.length} variations</span>
           </div>
         </div>
       </header>
@@ -275,10 +287,10 @@ export default function Dashboard() {
       </section>
 
       <section style={styles.statsRow}>
-        <StatCard label="States" value={summary?.states?.length || 0} />
-        <StatCard label="Programs" value={summary?.programs?.length || 0} />
-        <StatCard label="Medications" value={summary?.medications?.length || 0} />
-        <StatCard label="Pharmacies" value={summary?.pharmacies?.length || 0} />
+        <StatCard label="States" value={liveStats.states} />
+        <StatCard label="Programs" value={liveStats.programs} />
+        <StatCard label="Medications" value={liveStats.medications} />
+        <StatCard label="Pharmacies" value={liveStats.pharmacies} />
         <StatCard label="Variations" value={routingVariations.length} alert />
       </section>
 
@@ -407,21 +419,21 @@ export default function Dashboard() {
         {activeTab === 'variations' && (
           <div style={styles.tableWrap}>
             <div style={styles.resultCount}>{routingVariations.length} routing variation{routingVariations.length !== 1 ? "s" : ""} found</div>
-            {routingVariations.length === 0 && <p style={{ color: "#94a3b8", padding: 16 }}>All pharmacy assignments are consistent across states. No medications are routed differently by state.</p>}
+            {routingVariations.length === 0 && <p style={{ color: "#64748b", padding: 16 }}>All pharmacy assignments are consistent across states. No medications are routed differently by state.</p>}
             {routingVariations.map((v, i) => (
-              <div key={i} style={{ background: "#1e293b", borderRadius: 12, padding: 20, marginBottom: 16, border: "1px solid #334155" }}>
+              <div key={i} style={{ background: "#ffffff", borderRadius: 12, padding: 20, marginBottom: 16, border: "1px solid #334155" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-                  <span style={{ color: "#f1f5f9", fontWeight: 600, fontSize: 16 }}>{v.medication}</span>
-                  <span style={{ color: "#94a3b8", fontSize: 13 }}>{v.drug} | {v.dosage} | {v.frequency} | {v.sex} | {v.payment_plan || "no plan"}</span>
+                  <span style={{ color: "#1e293b", fontWeight: 600, fontSize: 16 }}>{v.medication}</span>
+                  <span style={{ color: "#64748b", fontSize: 13 }}>{v.drug} | {v.dosage} | {v.frequency} | {v.sex} | {v.payment_plan || "no plan"}</span>
                 </div>
                 <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
                   {v.routes.map((route, j) => (
-                    <div key={j} style={{ background: "#0f172a", borderRadius: 8, padding: 14, border: "1px solid #1e293b" }}>
+                    <div key={j} style={{ background: "#f8fafc", borderRadius: 8, padding: 14, border: "1px solid #e2e8f0" }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
-                        <span style={{ background: j === 0 ? "#166534" : "#92400e", color: "#fff", padding: "2px 10px", borderRadius: 6, fontSize: 12, fontWeight: 600 }}>{route.pharmacies}</span>
-                        <span style={{ color: "#94a3b8", fontSize: 13 }}>{route.count} state{route.count !== 1 ? "s" : ""}</span>
+                        <span style={{ background: j === 0 ? "#3b82f6" : "#f59e0b", color: "#fff", padding: "2px 10px", borderRadius: 6, fontSize: 12, fontWeight: 600 }}>{route.pharmacies}</span>
+                        <span style={{ color: "#64748b", fontSize: 13 }}>{route.count} state{route.count !== 1 ? "s" : ""}</span>
                       </div>
-                      <div style={{ color: "#cbd5e1", fontSize: 13, lineHeight: 1.5 }}>{route.states.join(", ")}</div>
+                      <div style={{ color: "#475569", fontSize: 13, lineHeight: 1.5 }}>{route.states.join(", ")}</div>
                     </div>
                   ))}
                 </div>
@@ -469,21 +481,21 @@ export default function Dashboard() {
             <div style={styles.resultCount}>Formulary Change Log</div>
             {!changelog ? (
               <div style={{ padding: 32, textAlign: "center" }}>
-                <p style={{ color: "#94a3b8", fontSize: 15, marginBottom: 8 }}>No previous snapshots available yet.</p>
-                <p style={{ color: "#64748b", fontSize: 13 }}>After the next EHR scrape, changes will be tracked automatically: new medications added, medications removed, pharmacy routing changes, and dosage updates.</p>
+                <p style={{ color: "#64748b", fontSize: 15, marginBottom: 8 }}>No previous snapshots available yet.</p>
+                <p style={{ color: "#94a3b8", fontSize: 13 }}>After the next EHR scrape, changes will be tracked automatically: new medications added, medications removed, pharmacy routing changes, and dosage updates.</p>
               </div>
             ) : (
               <div>
                 {changelog.entries.map((entry, i) => (
-                  <div key={i} style={{ background: "#1e293b", borderRadius: 10, padding: 16, marginBottom: 12, border: "1px solid #334155" }}>
+                  <div key={i} style={{ background: "#ffffff", borderRadius: 10, padding: 16, marginBottom: 12, border: "1px solid #334155" }}>
                     <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 10 }}>
-                      <span style={{ color: "#f1f5f9", fontWeight: 600 }}>{entry.date}</span>
-                      <span style={{ color: "#94a3b8", fontSize: 13 }}>{entry.summary}</span>
+                      <span style={{ color: "#1e293b", fontWeight: 600 }}>{entry.date}</span>
+                      <span style={{ color: "#64748b", fontSize: 13 }}>{entry.summary}</span>
                     </div>
                     {entry.changes.map((c, j) => (
-                      <div key={j} style={{ padding: "4px 0", borderTop: "1px solid #0f172a", display: "flex", gap: 10, alignItems: "center" }}>
-                        <span style={{ background: c.type === "added" ? "#166534" : c.type === "removed" ? "#991b1b" : "#92400e", color: "#fff", padding: "1px 8px", borderRadius: 4, fontSize: 11, fontWeight: 600, minWidth: 60, textAlign: "center" }}>{c.type}</span>
-                        <span style={{ color: "#e2e8f0", fontSize: 13 }}>{c.description}</span>
+                      <div key={j} style={{ padding: "4px 0", borderTop: "1px solid #e2e8f0", display: "flex", gap: 10, alignItems: "center" }}>
+                        <span style={{ background: c.type === "added" ? "#16a34a" : c.type === "removed" ? "#dc2626" : "#d97706", color: "#fff", padding: "1px 8px", borderRadius: 4, fontSize: 11, fontWeight: 600, minWidth: 60, textAlign: "center" }}>{c.type}</span>
+                        <span style={{ color: "#1e293b", fontSize: 13 }}>{c.description}</span>
                       </div>
                     ))}
                   </div>
@@ -523,19 +535,19 @@ export default function Dashboard() {
             <h3 style={styles.summaryTitle}>Pharmacy Details</h3>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 16 }}>
               {pharmacyStats.map(p => (
-                <div key={p.name} style={{ background: "#0f172a", borderRadius: 10, padding: 16, border: "1px solid #1e293b" }}>
-                  <div style={{ fontSize: 18, fontWeight: 700, color: "#f1f5f9", marginBottom: 10 }}>{p.name}</div>
+                <div key={p.name} style={{ background: "#f8fafc", borderRadius: 10, padding: 16, border: "1px solid #dbeafe" }}>
+                  <div style={{ fontSize: 18, fontWeight: 700, color: "#1e40af", marginBottom: 10 }}>{p.name}</div>
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 10 }}>
-                    <div style={{ color: "#94a3b8", fontSize: 13 }}>Medications: <strong style={{ color: "#e2e8f0" }}>{p.meds}</strong></div>
-                    <div style={{ color: "#94a3b8", fontSize: 13 }}>States: <strong style={{ color: "#e2e8f0" }}>{p.states}</strong></div>
-                    <div style={{ color: "#94a3b8", fontSize: 13 }}>Records: <strong style={{ color: "#e2e8f0" }}>{p.records.toLocaleString()}</strong></div>
+                    <div style={{ color: "#64748b", fontSize: 13 }}>Medications: <strong style={{ color: "#1e293b" }}>{p.meds}</strong></div>
+                    <div style={{ color: "#64748b", fontSize: 13 }}>States: <strong style={{ color: "#1e293b" }}>{p.states}</strong></div>
+                    <div style={{ color: "#64748b", fontSize: 13 }}>Records: <strong style={{ color: "#1e293b" }}>{p.records.toLocaleString()}</strong></div>
                   </div>
                   <div style={{ marginBottom: 6 }}>
-                    <span style={{ color: "#94a3b8", fontSize: 12 }}>Programs: </span>
+                    <span style={{ color: "#64748b", fontSize: 12 }}>Programs: </span>
                     {p.programs.map(pr => <span key={pr} style={styles.tagBlue}>{pr}</span>)}
                   </div>
                   <div>
-                    <span style={{ color: "#94a3b8", fontSize: 12 }}>Plans: </span>
+                    <span style={{ color: "#64748b", fontSize: 12 }}>Plans: </span>
                     {p.plans.map(pl => <span key={pl} style={styles.tag}>{pl}</span>)}
                   </div>
                 </div>
@@ -566,65 +578,69 @@ function sorted(s) {
 }
 
 const styles = {
-  container: { minHeight: '100vh', background: '#0f172a', color: '#e2e8f0', fontFamily: "'Inter', -apple-system, sans-serif" },
-  loadingContainer: { display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100vh', background: '#0f172a' },
-  spinner: { width: 48, height: 48, border: '4px solid #1e293b', borderTop: '4px solid #38bdf8', borderRadius: '50%', animation: 'spin 1s linear infinite' },
-  loadingText: { marginTop: 16, color: '#94a3b8', fontSize: 16 },
-  header: { background: 'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)', borderBottom: '1px solid #1e293b', padding: '24px 0' },
-  headerInner: { maxWidth: 1400, margin: '0 auto', padding: '0 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 16 },
-  title: { fontSize: 28, fontWeight: 700, color: '#f1f5f9', margin: 0 },
-  subtitle: { fontSize: 14, color: '#94a3b8', marginTop: 4 },
-  headerMeta: { display: 'flex', gap: 8, flexWrap: 'wrap' },
-  badge: { background: '#1e293b', color: '#94a3b8', padding: '4px 12px', borderRadius: 6, fontSize: 13 },
-  badgeGreen: { background: '#064e3b', color: '#6ee7b7', padding: '4px 12px', borderRadius: 6, fontSize: 13 },
-  badgeAmber: { background: '#78350f', color: '#fbbf24', padding: '4px 12px', borderRadius: 6, fontSize: 13 },
+  container: { minHeight: '100vh', background: '#f0f7ff', color: '#1e293b', fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif' },
+  header: { background: '#ffffff', borderBottom: '1px solid #dbeafe', padding: '20px 0', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' },
+  headerInner: { maxWidth: 1400, margin: '0 auto', padding: '0 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
+  headerMeta: { display: 'flex', gap: 8, alignItems: 'center' },
+  title: { fontSize: 28, fontWeight: 800, color: '#1e40af', margin: 0 },
+  subtitle: { color: '#64748b', fontSize: 14, margin: '4px 0 0 0' },
   infoSection: { maxWidth: 1400, margin: '24px auto', padding: '0 24px' },
-  infoTitle: { fontSize: 18, fontWeight: 600, color: '#cbd5e1', marginBottom: 16 },
-  infoGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 16 },
-  infoCard: { background: '#1e293b', borderRadius: 12, padding: 20, border: '1px solid #334155' },
-  infoIcon: { fontSize: 28, marginBottom: 8 },
-  infoCardTitle: { fontSize: 16, fontWeight: 600, color: '#e2e8f0', margin: '0 0 8px' },
-  infoCardText: { fontSize: 13, color: '#94a3b8', lineHeight: 1.6, margin: 0 },
+  infoTitle: { color: '#1e293b', fontSize: 18, fontWeight: 700, marginBottom: 16 },
+  infoCards: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 16 },
+  infoCard: { background: '#ffffff', borderRadius: 12, padding: 20, border: '1px solid #dbeafe', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' },
+  infoIcon: { fontSize: 22, fontWeight: 700, color: '#3b82f6', marginBottom: 8 },
+  infoCardTitle: { fontSize: 15, fontWeight: 700, color: '#1e293b', marginBottom: 8 },
+  infoCardText: { color: '#64748b', fontSize: 13, lineHeight: 1.5, margin: 0 },
   statsRow: { display: 'flex', gap: 16, maxWidth: 1400, margin: '24px auto', padding: '0 24px', flexWrap: 'wrap' },
-  statCard: { flex: '1 1 140px', background: '#1e293b', borderRadius: 12, padding: '16px 20px', textAlign: 'center', border: '1px solid #334155' },
-  statCardAlert: { border: '1px solid #f59e0b', background: '#1c1917' },
-  statValue: { fontSize: 28, fontWeight: 700, color: '#f1f5f9' },
-  statLabel: { fontSize: 12, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: 1, marginTop: 4 },
+  statCard: { flex: 1, minWidth: 120, background: '#ffffff', borderRadius: 12, padding: '16px 20px', textAlign: 'center', border: '1px solid #dbeafe', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' },
+  statCardAlert: { flex: 1, minWidth: 120, background: '#fef2f2', borderRadius: 12, padding: '16px 20px', textAlign: 'center', border: '1px solid #fecaca' },
+  statValue: { fontSize: 28, fontWeight: 800, color: '#1e40af' },
+  statLabel: { fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 1, color: '#64748b', marginTop: 4 },
   tabRow: { display: 'flex', gap: 4, maxWidth: 1400, margin: '24px auto 0', padding: '0 24px' },
-  tab: { padding: '10px 20px', background: '#1e293b', color: '#94a3b8', border: '1px solid #334155', borderBottom: 'none', borderRadius: '8px 8px 0 0', cursor: 'pointer', fontSize: 14 },
-  tabActive: { padding: '10px 20px', background: '#0f172a', color: '#38bdf8', border: '1px solid #334155', borderBottom: '2px solid #38bdf8', borderRadius: '8px 8px 0 0', cursor: 'pointer', fontSize: 14, fontWeight: 600 },
-  filterBar: { display: 'flex', gap: 8, maxWidth: 1400, margin: '0 auto', padding: '16px 24px', flexWrap: 'wrap', alignItems: 'center', background: '#1e293b', borderRadius: '0 0 12px 12px', border: '1px solid #334155', borderTop: 'none' },
-  searchInput: { padding: '8px 12px', background: '#0f172a', color: '#e2e8f0', border: '1px solid #334155', borderRadius: 6, fontSize: 14, minWidth: 220 },
-  select: { padding: '8px 12px', background: '#0f172a', color: '#e2e8f0', border: '1px solid #334155', borderRadius: 6, fontSize: 13 },
-  resetBtn: { padding: '8px 16px', background: '#ef4444', color: 'white', border: 'none', borderRadius: 6, cursor: 'pointer', fontSize: 13, fontWeight: 600 },
-  tableWrap: { maxWidth: 1400, margin: '16px auto', padding: '0 24px' },
-  resultCount: { fontSize: 13, color: '#94a3b8', marginBottom: 8 },
-  table: { width: '100%', borderCollapse: 'collapse', fontSize: 13, background: '#1e293b', borderRadius: 8, overflow: 'hidden' },
-  th: { padding: '10px 12px', background: '#334155', color: '#cbd5e1', textAlign: 'left', fontWeight: 600, fontSize: 12, textTransform: 'uppercase', letterSpacing: 0.5, position: 'sticky', top: 0 },
-  td: { padding: '8px 12px', borderBottom: '1px solid #1e293b', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
-  row: { background: '#0f172a' },
-  rowAlt: { background: '#1e293b' },
-  pagination: { display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 16, padding: '12px 0' },
-  pageBtn: { padding: '6px 12px', background: '#334155', color: '#e2e8f0', border: 'none', borderRadius: 6, cursor: 'pointer', fontSize: 14 },
-  pageInfo: { color: '#94a3b8', fontSize: 13, minWidth: 120, textAlign: 'center' },
-  dispCard: { background: '#1e293b', borderRadius: 12, padding: 20, marginBottom: 12, border: '1px solid #334155' },
-  dispHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, flexWrap: 'wrap', gap: 8 },
-  dispDrug: { fontSize: 16, fontWeight: 600, color: '#f1f5f9' },
-  dispMeta: { fontSize: 13, color: '#94a3b8' },
-  dispTypes: { display: 'flex', gap: 6, marginBottom: 12, flexWrap: 'wrap' },
-  dispBadge: { background: '#78350f', color: '#fbbf24', padding: '3px 10px', borderRadius: 4, fontSize: 12, fontWeight: 600 },
+  tab: { padding: '10px 20px', borderRadius: '8px 8px 0 0', border: 'none', background: '#e0ecff', color: '#3b82f6', cursor: 'pointer', fontSize: 14, fontWeight: 600 },
+  tabActive: { padding: '10px 20px', borderRadius: '8px 8px 0 0', border: 'none', background: '#ffffff', color: '#1e40af', cursor: 'pointer', fontSize: 14, fontWeight: 700, boxShadow: '0 -1px 3px rgba(0,0,0,0.05)' },
+  filterBar: { display: 'flex', gap: 8, maxWidth: 1400, margin: '0 auto', padding: '16px 24px', background: '#ffffff', flexWrap: 'wrap', alignItems: 'center', borderBottom: '1px solid #e2e8f0' },
+  searchInput: { padding: '8px 12px', borderRadius: 6, border: '1px solid #cbd5e1', background: '#f8fafc', color: '#1e293b', fontSize: 13, width: '100%' },
+  filterSelect: { padding: '8px 12px', borderRadius: 6, border: '1px solid #cbd5e1', background: '#f8fafc', color: '#1e293b', fontSize: 13 },
+  resetBtn: { padding: '6px 16px', borderRadius: 6, border: '1px solid #fecaca', background: '#fef2f2', color: '#dc2626', cursor: 'pointer', fontSize: 13, fontWeight: 600 },
+  exportBtn: { padding: '6px 16px', borderRadius: 6, border: '1px solid #bbf7d0', background: '#f0fdf4', color: '#16a34a', cursor: 'pointer', fontSize: 13, fontWeight: 600 },
+  tableWrap: { maxWidth: 1400, margin: '0 auto', padding: '16px 24px' },
+  resultCount: { color: '#64748b', fontSize: 13, marginBottom: 12 },
+  table: { width: '100%', borderCollapse: 'collapse', fontSize: 13 },
+  th: { textAlign: 'left', padding: '10px 12px', borderBottom: '2px solid #dbeafe', color: '#1e40af', fontWeight: 700, fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.5, background: '#f0f7ff' },
+  td: { padding: '8px 12px', borderBottom: '1px solid #e2e8f0', color: '#334155' },
+  rowEven: { background: '#ffffff' },
+  rowOdd: { background: '#f8fafc' },
+  pageRow: { display: 'flex', justifyContent: 'center', gap: 8, padding: 16, alignItems: 'center' },
+  pageBtn: { padding: '6px 12px', borderRadius: 6, border: '1px solid #cbd5e1', background: '#ffffff', color: '#3b82f6', cursor: 'pointer', fontSize: 13 },
+  pageInfo: { color: '#64748b', fontSize: 13 },
+  loadingContainer: { display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '60vh' },
+  spinner: { width: 40, height: 40, border: '4px solid #dbeafe', borderTopColor: '#3b82f6', borderRadius: '50%', animation: 'spin 1s linear infinite' },
+  loadingText: { color: '#64748b', marginTop: 16, fontSize: 15 },
+  errorContainer: { display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '60vh', color: '#dc2626' },
+  dispCard: { background: '#ffffff', borderRadius: 10, padding: 16, marginBottom: 12, border: '1px solid #dbeafe', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' },
+  dispHeader: { display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, marginBottom: 8 },
+  dispDrug: { fontWeight: 700, color: '#1e293b', fontSize: 15 },
+  dispMeta: { color: '#64748b', fontSize: 13 },
+  dispTypes: { display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 8 },
+  dispBadge: { background: '#dbeafe', color: '#1e40af', padding: '2px 10px', borderRadius: 4, fontSize: 12, fontWeight: 600 },
   dispDetails: { display: 'flex', flexDirection: 'column', gap: 8 },
-  dispGroup: { background: '#0f172a', borderRadius: 8, padding: 12 },
-  dispGroupVals: { display: 'flex', gap: 12, marginBottom: 8, flexWrap: 'wrap' },
-  dispKV: { fontSize: 13, color: '#cbd5e1' },
-  dispStates: { fontSize: 12, color: '#64748b', lineHeight: 1.6 },
+  dispGroup: { background: '#f8fafc', borderRadius: 6, padding: 10, border: '1px solid #e2e8f0' },
+  dispGroupVals: { display: 'flex', gap: 16, flexWrap: 'wrap', marginBottom: 4 },
+  dispKV: { color: '#334155', fontSize: 13 },
+  dispStates: { color: '#64748b', fontSize: 12, lineHeight: 1.4 },
   summaryWrap: { maxWidth: 1400, margin: '16px auto', padding: '0 24px' },
-  summarySection: { background: '#1e293b', borderRadius: 12, padding: 20, marginBottom: 16, border: '1px solid #334155' },
-  summaryTitle: { fontSize: 16, fontWeight: 600, color: '#e2e8f0', marginBottom: 12 },
+  summarySection: { background: '#ffffff', borderRadius: 12, padding: 20, marginBottom: 16, border: '1px solid #dbeafe', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' },
+  summaryTitle: { color: '#1e293b', fontSize: 16, fontWeight: 700, marginBottom: 12 },
   tagWrap: { display: 'flex', flexWrap: 'wrap', gap: 6 },
-  tag: { background: '#334155', color: '#cbd5e1', padding: '4px 10px', borderRadius: 4, fontSize: 12 },
-  tagBlue: { background: '#1e3a5f', color: '#7dd3fc', padding: '4px 10px', borderRadius: 4, fontSize: 12 },
-  tagGreen: { background: '#064e3b', color: '#6ee7b7', padding: '4px 10px', borderRadius: 4, fontSize: 12 },
-  tagAmber: { background: '#78350f', color: '#fbbf24', padding: '4px 10px', borderRadius: 4, fontSize: 12 },
-  footer: { textAlign: 'center', padding: '32px 24px', color: '#475569', fontSize: 13, borderTop: '1px solid #1e293b', marginTop: 32 },
+  tag: { background: '#f0f7ff', color: '#3b82f6', padding: '4px 10px', borderRadius: 6, fontSize: 12, border: '1px solid #dbeafe' },
+  tagBlue: { background: '#eff6ff', color: '#1d4ed8', padding: '4px 10px', borderRadius: 6, fontSize: 12, border: '1px solid #bfdbfe' },
+  tagGreen: { background: '#f0fdf4', color: '#16a34a', padding: '4px 10px', borderRadius: 6, fontSize: 12, border: '1px solid #bbf7d0' },
+  tagAmber: { background: '#fffbeb', color: '#d97706', padding: '4px 10px', borderRadius: 6, fontSize: 12, border: '1px solid #fde68a' },
+  footer: { textAlign: 'center', padding: '32px 24px', color: '#94a3b8', fontSize: 13 },
+  suggestBox: { position: 'absolute', top: '100%', left: 0, right: 0, background: '#ffffff', border: '1px solid #dbeafe', borderRadius: 8, marginTop: 4, zIndex: 50, maxHeight: 240, overflowY: 'auto', boxShadow: '0 8px 24px rgba(0,0,0,0.1)' },
+  suggestItem: { padding: '8px 12px', color: '#1e293b', fontSize: 13, cursor: 'pointer', borderBottom: '1px solid #f1f5f9' },
+  badge: { background: '#f0f7ff', color: '#3b82f6', padding: '4px 12px', borderRadius: 6, fontSize: 13 },
+  badgeGreen: { background: '#f0fdf4', color: '#16a34a', padding: '4px 12px', borderRadius: 6, fontSize: 13 },
+  badgeAmber: { background: '#fffbeb', color: '#d97706', padding: '4px 12px', borderRadius: 6, fontSize: 13 },
 }
