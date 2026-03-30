@@ -44,6 +44,9 @@ export default function Dashboard() {
   const [pharmacyFilter, setPharmacyFilter] = useState('')
   const [search, setSearch] = useState('')
   const [showSuggestions, setShowSuggestions] = useState(false)
+  const [showInfo, setShowInfo] = useState(false)
+  const [sortCol, setSortCol] = useState(null)
+  const [sortDir, setSortDir] = useState(1)
   const [filterPlan, setFilterPlan] = useState('')
 
   const [activeTab, setActiveTab] = useState('catalog')
@@ -94,9 +97,18 @@ export default function Dashboard() {
     return unique
   }, [data, sexFilter, programFilter, medFilter, pharmacyFilter, search, filterPlan])
 
+  const sortedData = useMemo(() => {
+    if (!sortCol) return filtered
+    return [...filtered].sort((a, b) => {
+      const av = (a[sortCol] || '').toLowerCase()
+      const bv = (b[sortCol] || '').toLowerCase()
+      return av < bv ? -sortDir : av > bv ? sortDir : 0
+    })
+  }, [filtered, sortCol, sortDir])
+
   const pagedData = useMemo(() => {
-    return filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE)
-  }, [filtered, page])
+    return sortedData.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE)
+  }, [sortedData, page])
 
   const totalPages = Math.ceil(filtered.length / PAGE_SIZE)
 
@@ -240,6 +252,11 @@ export default function Dashboard() {
 
   return (
     <div style={styles.container}>
+      <style>{`
+        .dash-row:hover { background: #eff6ff !important; }
+        .dash-th { cursor: pointer; user-select: none; }
+        .dash-th:hover { color: #1e40af; }
+      `}</style>
       <header style={styles.header}>
         <div style={styles.headerInner}>
           <div style={{display:'flex',alignItems:'center',gap:'16px'}}>
@@ -253,6 +270,7 @@ export default function Dashboard() {
             <p style={styles.subtitle}>
               Medication catalog, pharmacy routing, and state-by-state variation analysis
             </p>
+            {summary && summary.scrape_date && <p style={{fontSize:12,color:'#64748b',margin:'4px 0 0 0'}}>Data last updated: {summary.scrape_date}</p>}
           </div>
           </div>
           <div style={styles.headerMeta}>
@@ -261,8 +279,11 @@ export default function Dashboard() {
       </header>
 
       <section style={styles.infoSection}>
-        <h2 style={styles.infoTitle}>How This Dashboard Works</h2>
-        <div style={styles.infoGrid}>
+        <div onClick={() => setShowInfo(!showInfo)} style={{display:'flex',alignItems:'center',justifyContent:'space-between',cursor:'pointer',padding:'12px 20px',background:'#ffffff',borderRadius:12,border:'1px solid #dbeafe'}}>
+          <h2 style={{...styles.infoTitle, margin:0}}>How This Dashboard Works</h2>
+          <span style={{fontSize:20,color:'#3b82f6',transition:'transform 0.2s',transform:showInfo?'rotate(180deg)':'rotate(0deg)'}}>▼</span>
+        </div>
+        {showInfo && <div style={{...styles.infoGrid, marginTop:12}}>
           <div style={styles.infoCard}>
             <div style={styles.infoIcon}>[1]</div>
             <h3 style={styles.infoCardTitle}>Medication Catalog</h3>
@@ -290,7 +311,7 @@ export default function Dashboard() {
               and dosages. All filters combine (AND logic). Click &ldquo;Reset All&rdquo; to clear.
             </p>
           </div>
-        </div>
+        </div>}
       </section>
 
       <section style={styles.statsRow}>
@@ -389,14 +410,16 @@ export default function Dashboard() {
           <table style={styles.table}>
             <thead>
               <tr>
-                {['Sex','Program','Medication','Drug','Dosage','Freq','Pharmacy','Med Code','Supply Code','Plan'].map(h => (
-                  <th key={h} style={styles.th}>{h}</th>
-                ))}
+                {['Sex','Program','Medication','Drug','Dosage','Freq','Pharmacy','Med Code','Supply Code','Plan'].map((h, idx) => {
+                  const key = SORT_KEYS[idx]
+                  const active = sortCol === key
+                  return <th key={h} className="dash-th" style={{...styles.th, color: active ? '#1e40af' : undefined}} onClick={() => { if (active) { setSortDir(d => -d) } else { setSortCol(key); setSortDir(1) } }}>{h}{active ? (sortDir === 1 ? ' ▲' : ' ▼') : ''}</th>
+                })}
               </tr>
             </thead>
             <tbody>
               {pagedData.map((r, i) => (
-                <tr key={i} style={i % 2 ? styles.rowAlt : styles.row}>
+                <tr key={i} className="dash-row" style={i % 2 ? styles.rowAlt : styles.row}>
                                     <td style={styles.td}>{r.sex}</td>
                   <td style={styles.td}>{PROGRAM_LABELS[r.program] || r.program}</td>
                   <td style={styles.td}>{r.medication}</td>
@@ -606,7 +629,7 @@ const styles = {
   tabRow: { display: 'flex', gap: 4, maxWidth: 1400, margin: '24px auto 0', padding: '0 24px' },
   tab: { padding: '10px 20px', borderRadius: '8px 8px 0 0', border: 'none', background: '#e0ecff', color: '#3b82f6', cursor: 'pointer', fontSize: 14, fontWeight: 600 },
   tabActive: { padding: '10px 20px', borderRadius: '8px 8px 0 0', border: 'none', background: '#ffffff', color: '#1e40af', cursor: 'pointer', fontSize: 14, fontWeight: 700, boxShadow: '0 -1px 3px rgba(0,0,0,0.05)' },
-  filterBar: { display: 'flex', gap: 8, maxWidth: 1400, margin: '0 auto', padding: '16px 24px', background: '#ffffff', flexWrap: 'wrap', alignItems: 'center', borderBottom: '1px solid #e2e8f0' },
+  filterBar: { display: 'flex', gap: 8, maxWidth: 1400, margin: '0 auto', padding: '16px 24px', background: '#ffffff', flexWrap: 'wrap', alignItems: 'center', borderBottom: '1px solid #e2e8f0', position: 'sticky', top: 0, zIndex: 100, boxShadow: '0 2px 8px rgba(0,0,0,0.06)' },
   searchInput: { padding: '8px 12px', borderRadius: 6, border: '1px solid #cbd5e1', background: '#f8fafc', color: '#1e293b', fontSize: 13, width: '100%' },
   filterSelect: { padding: '8px 12px', borderRadius: 6, border: '1px solid #cbd5e1', background: '#f8fafc', color: '#1e293b', fontSize: 13 },
   resetBtn: { padding: '6px 16px', borderRadius: 6, border: '1px solid #fecaca', background: '#fef2f2', color: '#dc2626', cursor: 'pointer', fontSize: 13, fontWeight: 600 },
