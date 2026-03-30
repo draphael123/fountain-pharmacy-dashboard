@@ -1,0 +1,6 @@
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: #f8f9fa; }
+@keyframes spin { to { transform: rotate(360deg); } }
+button:disabled { opacity: 0.4; cursor: not-allowed; }
+select:focus, input:focus { outline: none; border-color: #c0392b; box-shadow: 0 0 0 2px rgba(192,57,43,0.15); }
+button:hover:not(:disabled) { background: #f5f5f5; }
