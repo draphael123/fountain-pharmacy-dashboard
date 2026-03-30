@@ -37,8 +37,7 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState(null)
 
-  const [stateFilter, setStateFilter] = useState('')
-  const [sexFilter, setSexFilter] = useState('')
+    const [sexFilter, setSexFilter] = useState('')
   const [programFilter, setProgramFilter] = useState('')
   const [medFilter, setMedFilter] = useState('')
   const [pharmacyFilter, setPharmacyFilter] = useState('')
@@ -67,7 +66,6 @@ export default function Dashboard() {
 
   const filtered = useMemo(() => {
     let f = data
-    if (stateFilter) f = f.filter(r => r.state === stateFilter)
     if (sexFilter) f = f.filter(r => r.sex === sexFilter)
     if (programFilter) f = f.filter(r => r.program === programFilter)
     if (medFilter) f = f.filter(r => r.medication === medFilter)
@@ -82,8 +80,15 @@ export default function Dashboard() {
         (r.dosage || '').toLowerCase().includes(s)
       )
     }
-    return f
-  }, [data, stateFilter, sexFilter, programFilter, medFilter, pharmacyFilter, search, filterPlan])
+    // Deduplicate: without state column, collapse identical rows
+    const seen = new Set()
+    const unique = []
+    for (const r of f) {
+      const key = [r.sex, r.program, r.medication, r.drug, r.dosage, r.frequency, r.pharmacy, r.med_code, r.supply_code, r.payment_plan].join('|')
+      if (!seen.has(key)) { seen.add(key); unique.push(r) }
+    }
+    return unique
+  }, [data, sexFilter, programFilter, medFilter, pharmacyFilter, search, filterPlan])
 
   const pagedData = useMemo(() => {
     return filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE)
@@ -93,15 +98,13 @@ export default function Dashboard() {
 
   const filterOptions = useMemo(() => {
     let f = data
-    const states = sorted(new Set(f.map(r => r.state)))
     const programs = sorted(new Set(f.map(r => r.program)))
-    if (stateFilter) f = f.filter(r => r.state === stateFilter)
     if (sexFilter) f = f.filter(r => r.sex === sexFilter)
     if (programFilter) f = f.filter(r => r.program === programFilter)
     const meds = sorted(new Set(f.map(r => r.medication)))
     const pharmacies = sorted(new Set(f.map(r => r.pharmacy).filter(Boolean)))
-    return { states, programs, meds, pharmacies }
-  }, [data, stateFilter, sexFilter, programFilter])
+    return { programs, meds, pharmacies }
+  }, [data, sexFilter, programFilter])
 
   const routingVariations = useMemo(() => {
     if (!data.length) return []
@@ -138,7 +141,6 @@ export default function Dashboard() {
   }, [data, search])
 
   function resetFilters() {
-    setStateFilter('')
     setSexFilter('')
     setProgramFilter('')
     setMedFilter('')
@@ -245,10 +247,7 @@ export default function Dashboard() {
           onChange={e => { setSearch(e.target.value); setPage(0) }}
           style={styles.searchInput}
         />
-        <select value={stateFilter} onChange={e => { setStateFilter(e.target.value); setPage(0) }} style={styles.select}>
-          <option value="">All States</option>
-          {(filterOptions.states || []).map(s => <option key={s}>{s}</option>)}
-        </select>
+        
         <select value={sexFilter} onChange={e => { setSexFilter(e.target.value); setPage(0) }} style={styles.select}>
           <option value="">All Sexes</option>
           <option value="male">Male</option>
@@ -283,7 +282,7 @@ export default function Dashboard() {
           <table style={styles.table}>
             <thead>
               <tr>
-                {['State','Sex','Program','Medication','Drug','Dosage','Freq','Pharmacy','Med Code','Supply Code','Plan'].map(h => (
+                {['Sex','Program','Medication','Drug','Dosage','Freq','Pharmacy','Med Code','Supply Code','Plan'].map(h => (
                   <th key={h} style={styles.th}>{h}</th>
                 ))}
               </tr>
@@ -291,8 +290,7 @@ export default function Dashboard() {
             <tbody>
               {pagedData.map((r, i) => (
                 <tr key={i} style={i % 2 ? styles.rowAlt : styles.row}>
-                  <td style={styles.td}>{r.state}</td>
-                  <td style={styles.td}>{r.sex}</td>
+                                    <td style={styles.td}>{r.sex}</td>
                   <td style={styles.td}>{PROGRAM_LABELS[r.program] || r.program}</td>
                   <td style={styles.td}>{r.medication}</td>
                   <td style={styles.td}>{r.drug}</td>
