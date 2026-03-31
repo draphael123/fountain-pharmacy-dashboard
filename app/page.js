@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect, useMemo } from 'react'
+import React, { useState, useEffect, useMemo } from 'react'
 
 const PROGRAM_LABELS = {
   TRT: 'TRT',
@@ -54,6 +54,8 @@ export default function Dashboard() {
   const [activeTab, setActiveTab] = useState('catalog')
   const [page, setPage] = useState(0)
   const [groupPlans, setGroupPlans] = useState(true)
+  const [expandedRow, setExpandedRow] = useState(null)
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false)
   const PAGE_SIZE = 50
 
   useEffect(() => {
@@ -125,6 +127,23 @@ export default function Dashboard() {
   }, [sortedData, page])
 
   const totalPages = Math.ceil(filtered.length / PAGE_SIZE)
+
+  // Build index: for each unique row key → list of states
+  const stateIndex = useMemo(() => {
+    const idx = {}
+    for (const r of data) {
+      const key = [r.sex, r.program, r.medication, r.drug, r.dosage, r.frequency, r.pharmacy, r.med_code, r.supply_code].join('|')
+      if (!idx[key]) idx[key] = new Set()
+      if (r.state) idx[key].add(r.state)
+    }
+    return idx
+  }, [data])
+
+  function getStatesForRow(r) {
+    const key = [r.sex, r.program, r.medication, r.drug, r.dosage, r.frequency, r.pharmacy, r.med_code, r.supply_code].join('|')
+    const states = stateIndex[key]
+    return states ? Array.from(states).sort() : []
+  }
 
   const filterOptions = useMemo(() => {
     let f = data
@@ -420,34 +439,39 @@ export default function Dashboard() {
           <option value="male">Male</option>
           <option value="female">Female</option>
         </select>
+        <select value={programFilter} onChange={e => { setProgramFilter(e.target.value); setPage(0) }} style={styles.select}>
+          <option value="">All Programs</option>
+          {(filterOptions.programs || []).map(p => <option key={p} value={p}>{PROGRAM_LABELS[p] || p}</option>)}
+        </select>
         {activeTab === 'catalog' && (
-          <>
-            <select value={programFilter} onChange={e => { setProgramFilter(e.target.value); setPage(0) }} style={styles.select}>
-              <option value="">All Programs</option>
-              {(filterOptions.programs || []).map(p => <option key={p} value={p}>{PROGRAM_LABELS[p] || p}</option>)}
-            </select>
-            <select value={medFilter} onChange={e => { setMedFilter(e.target.value); setPage(0) }} style={styles.select}>
-              <option value="">All Medications</option>
-              {(filterOptions.meds || []).map(m => <option key={m}>{m}</option>)}
-            </select>
-            <select value={pharmacyFilter} onChange={e => { setPharmacyFilter(e.target.value); setPage(0) }} style={styles.select}>
-              <option value="">All Pharmacies</option>
-              {(filterOptions.pharmacies || []).map(p => <option key={p}>{p}</option>)}
-            </select>
-            <select value={stateFilter} onChange={e => { setStateFilter(e.target.value); setPage(0) }} style={styles.select}>
-              <option value="">All States</option>
-              {(filterOptions.states || []).map(s => <option key={s}>{s}</option>)}
-            </select>
-          <select style={styles.filterSelect} value={filterPlan} onChange={e => { setFilterPlan(e.target.value); setPage(0) }}>
+          <button onClick={() => setShowAdvancedFilters(v => !v)} style={{ ...styles.pageBtn, fontSize: 12, padding: '6px 12px' }}>
+            {showAdvancedFilters ? 'Less Filters ▲' : 'More Filters ▼'}
+          </button>
+        )}
+        <button onClick={resetFilters} style={styles.resetBtn}>Reset All</button>
+        <button onClick={exportCSV} style={styles.exportBtn}>Export CSV</button>
+      </div>
+      {activeTab === 'catalog' && showAdvancedFilters && (
+        <div style={{ ...styles.filterBar, borderTop: 'none', paddingTop: 0, boxShadow: 'none' }}>
+          <select value={medFilter} onChange={e => { setMedFilter(e.target.value); setPage(0) }} style={styles.select}>
+            <option value="">All Medications</option>
+            {(filterOptions.meds || []).map(m => <option key={m}>{m}</option>)}
+          </select>
+          <select value={pharmacyFilter} onChange={e => { setPharmacyFilter(e.target.value); setPage(0) }} style={styles.select}>
+            <option value="">All Pharmacies</option>
+            {(filterOptions.pharmacies || []).map(p => <option key={p}>{p}</option>)}
+          </select>
+          <select value={stateFilter} onChange={e => { setStateFilter(e.target.value); setPage(0) }} style={styles.select}>
+            <option value="">All States</option>
+            {(filterOptions.states || []).map(s => <option key={s}>{s}</option>)}
+          </select>
+          <select style={styles.select} value={filterPlan} onChange={e => { setFilterPlan(e.target.value); setPage(0) }}>
             <option value="">All Plans</option>
             {PLAN_OPTIONS.map(p => <option key={p} value={p}>{p}</option>)}
           </select>
-          </>
-        )}
-        <button onClick={resetFilters} style={styles.resetBtn}>Reset All</button>
-        {activeTab === 'catalog' && <button onClick={() => { setGroupPlans(g => !g); setPage(0) }} style={groupPlans ? styles.exportBtn : styles.resetBtn}>{groupPlans ? 'Plans Grouped' : 'Plans Expanded'}</button>}
-          <button onClick={exportCSV} style={styles.exportBtn}>Export CSV</button>
-      </div>
+          <button onClick={() => { setGroupPlans(g => !g); setPage(0) }} style={groupPlans ? styles.exportBtn : styles.resetBtn}>{groupPlans ? 'Plans Grouped' : 'Plans Expanded'}</button>
+        </div>
+      )}
 
       {activeTab === 'catalog' && (
         <div style={styles.tableWrap}>
@@ -463,20 +487,38 @@ export default function Dashboard() {
               </tr>
             </thead>
             <tbody>
-              {pagedData.map((r, i) => (
-                <tr key={i} className="dash-row" style={i % 2 ? styles.rowAlt : styles.row}>
-                                    <td style={styles.td}>{r.sex}</td>
-                  <td style={styles.td}>{PROGRAM_LABELS[r.program] || r.program}</td>
-                  <td style={styles.td}>{r.medication}</td>
-                  <td style={styles.td}>{r.drug}</td>
-                  <td style={styles.td}>{r.dosage}</td>
-                  <td style={styles.td}>{r.frequency}</td>
-                  <td style={styles.td}>{r.pharmacy}</td>
-                  <td style={{...styles.td, fontFamily: 'monospace'}}>{r.med_code}</td>
-                  <td style={{...styles.td, fontFamily: 'monospace'}}>{r.supply_code}</td>
-                  <td style={styles.td}>{r._plans ? r._plans.sort().join(', ') : r.payment_plan}</td>
-                </tr>
-              ))}
+              {pagedData.map((r, i) => {
+                const rowKey = [r.sex, r.program, r.medication, r.drug, r.dosage, r.frequency, r.pharmacy, r.med_code, r.supply_code].join('|')
+                const isExpanded = expandedRow === page + '_' + i
+                return (
+                  <React.Fragment key={i}>
+                    <tr className="dash-row" style={{...(i % 2 ? styles.rowAlt : styles.row), cursor: 'pointer'}} onClick={() => setExpandedRow(isExpanded ? null : page + '_' + i)}>
+                      <td style={styles.td}>{r.sex}</td>
+                      <td style={styles.td}>{PROGRAM_LABELS[r.program] || r.program}</td>
+                      <td style={styles.td}>{r.medication}</td>
+                      <td style={styles.td}>{r.drug}</td>
+                      <td style={styles.td}>{r.dosage}</td>
+                      <td style={styles.td}>{r.frequency}</td>
+                      <td style={styles.td}>{r.pharmacy}</td>
+                      <td style={{...styles.td, fontFamily: 'monospace'}}>{r.med_code}</td>
+                      <td style={{...styles.td, fontFamily: 'monospace'}}>{r.supply_code}</td>
+                      <td style={styles.td}>{r._plans ? r._plans.sort().join(', ') : r.payment_plan}</td>
+                    </tr>
+                    {isExpanded && (
+                      <tr style={{ background: '#f0f7ff' }}>
+                        <td colSpan={10} style={{ padding: '12px 16px', borderBottom: '1px solid #dbeafe' }}>
+                          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+                            <span style={{ color: '#1e40af', fontWeight: 600, fontSize: 12, whiteSpace: 'nowrap' }}>Available in {getStatesForRow(r).length} states:</span>
+                            <div style={styles.tagWrap}>
+                              {getStatesForRow(r).map(s => <span key={s} style={styles.tag}>{s}</span>)}
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </React.Fragment>
+                )
+              })}
             </tbody>
           </table>
           {totalPages > 1 && (
