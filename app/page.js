@@ -261,13 +261,9 @@ export default function Dashboard() {
       <header style={styles.header}>
         <div style={styles.headerInner}>
           <div style={{display:'flex',alignItems:'center',gap:'16px'}}>
-            <svg width="44" height="44" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M50 5C50 5 20 40 20 60C20 77 33 90 50 90C67 90 80 77 80 60C80 40 50 5 50 5Z" fill="#0D9488" opacity="0.3"/>
-              <path d="M50 20C50 20 30 45 30 60C30 71 39 80 50 80C61 80 70 71 70 60C70 45 50 20 50 20Z" fill="#0F766E" opacity="0.5"/>
-              <path d="M50 35C50 35 38 50 38 60C38 67 43 73 50 73C57 73 62 67 62 60C62 50 50 35 50 35Z" fill="#134E4A"/>
-            </svg>
+            <img src="https://framerusercontent.com/images/TUOPymBCd2ZpwLZVUecqAX7Yo.png" alt="Fountain" style={{width:36,height:36}} /><img src="https://framerusercontent.com/images/LE6M6GYbhCcJvlv3VhjTi7wIw.png" alt="Fountain" style={{height:28}} />
             <div>
-            <h1 style={styles.title}>Fountain Pharmacy Dashboard</h1>
+            <h1 style={styles.title}>Pharmacy Dashboard</h1>
             <p style={styles.subtitle}>
               Medication catalog, pharmacy routing, and state-by-state variation analysis
             </p>
