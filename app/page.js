@@ -56,7 +56,42 @@ export default function Dashboard() {
   const [groupPlans, setGroupPlans] = useState(true)
   const [expandedRow, setExpandedRow] = useState(null)
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false)
+  const [medCodeFilter, setMedCodeFilter] = useState('')
+  const [lookupQuery, setLookupQuery] = useState('')
   const PAGE_SIZE = 50
+
+  // Sync filters FROM URL on mount
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const p = new URLSearchParams(window.location.search)
+    if (p.get('tab')) setActiveTab(p.get('tab'))
+    if (p.get('sex')) setSexFilter(p.get('sex'))
+    if (p.get('program')) setProgramFilter(p.get('program'))
+    if (p.get('med')) setMedFilter(p.get('med'))
+    if (p.get('pharmacy')) setPharmacyFilter(p.get('pharmacy'))
+    if (p.get('state')) setStateFilter(p.get('state'))
+    if (p.get('plan')) setFilterPlan(p.get('plan'))
+    if (p.get('medcode')) setMedCodeFilter(p.get('medcode'))
+    if (p.get('q')) setSearch(p.get('q'))
+  }, [])
+
+  // Sync filters TO URL on change
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const p = new URLSearchParams()
+    if (activeTab !== 'catalog') p.set('tab', activeTab)
+    if (sexFilter) p.set('sex', sexFilter)
+    if (programFilter) p.set('program', programFilter)
+    if (medFilter) p.set('med', medFilter)
+    if (pharmacyFilter) p.set('pharmacy', pharmacyFilter)
+    if (stateFilter) p.set('state', stateFilter)
+    if (filterPlan) p.set('plan', filterPlan)
+    if (medCodeFilter) p.set('medcode', medCodeFilter)
+    if (search) p.set('q', search)
+    const qs = p.toString()
+    const newUrl = window.location.pathname + (qs ? '?' + qs : '')
+    window.history.replaceState(null, '', newUrl)
+  }, [activeTab, sexFilter, programFilter, medFilter, pharmacyFilter, stateFilter, filterPlan, medCodeFilter, search])
 
   useEffect(() => {
     Promise.allSettled([
@@ -83,6 +118,7 @@ export default function Dashboard() {
     if (medFilter) f = f.filter(r => r.medication === medFilter)
     if (pharmacyFilter) f = f.filter(r => r.pharmacy === pharmacyFilter)
     if (stateFilter) f = f.filter(r => r.state === stateFilter)
+    if (medCodeFilter) f = f.filter(r => r.med_code === medCodeFilter)
     if (filterPlan) f = f.filter(r => r.payment_plan === filterPlan)
     if (search) {
       const s = search.toLowerCase()
@@ -111,7 +147,7 @@ export default function Dashboard() {
       if (!seen.has(key)) { seen.add(key); unique.push(r) }
     }
     return unique
-  }, [data, sexFilter, programFilter, medFilter, pharmacyFilter, stateFilter, search, filterPlan, groupPlans])
+  }, [data, sexFilter, programFilter, medFilter, pharmacyFilter, stateFilter, medCodeFilter, search, filterPlan, groupPlans])
 
   const sortedData = useMemo(() => {
     if (!sortCol) return filtered
@@ -153,7 +189,8 @@ export default function Dashboard() {
     if (programFilter) f = f.filter(r => r.program === programFilter)
     const meds = sorted(new Set(f.map(r => r.medication)))
     const pharmacies = sorted(new Set(f.map(r => r.pharmacy).filter(Boolean)))
-    return { programs, meds, pharmacies, states }
+    const medCodes = sorted(new Set(f.map(r => r.med_code).filter(Boolean)))
+    return { programs, meds, pharmacies, states, medCodes }
   }, [data, sexFilter, programFilter])
 
   const liveStats = useMemo(() => {
@@ -286,6 +323,7 @@ export default function Dashboard() {
     setMedFilter('')
     setPharmacyFilter('')
     setStateFilter('')
+    setMedCodeFilter('')
     setFilterPlan('')
     setSearch('')
     setPage(0)
@@ -300,6 +338,62 @@ export default function Dashboard() {
     const a = document.createElement('a')
     a.href = url
     a.download = 'fountain_pharmacy_catalog.csv'
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  // Build lookup results: group by medication → show all dosages/pharmacies/codes
+  const lookupResults = useMemo(() => {
+    if (!lookupQuery || lookupQuery.length < 2) return []
+    const q = lookupQuery.toLowerCase()
+    const matches = data.filter(r =>
+      (r.medication || '').toLowerCase().includes(q) ||
+      (r.drug || '').toLowerCase().includes(q) ||
+      (r.med_code || '').toLowerCase().includes(q)
+    )
+    // Group by medication + drug
+    const groups = {}
+    for (const r of matches) {
+      const gk = r.medication + '|' + r.drug
+      if (!groups[gk]) groups[gk] = { medication: r.medication, drug: r.drug, sex: r.sex, program: r.program, entries: {} }
+      const ek = [r.dosage, r.frequency, r.pharmacy, r.med_code, r.supply_code].join('|')
+      if (!groups[gk].entries[ek]) groups[gk].entries[ek] = { dosage: r.dosage, frequency: r.frequency, pharmacy: r.pharmacy, med_code: r.med_code, supply_code: r.supply_code, plans: new Set(), states: new Set() }
+      if (r.payment_plan) groups[gk].entries[ek].plans.add(r.payment_plan)
+      if (r.state) groups[gk].entries[ek].states.add(r.state)
+    }
+    return Object.values(groups).map(g => ({
+      ...g,
+      entries: Object.values(g.entries).map(e => ({ ...e, plans: Array.from(e.plans).sort(), states: Array.from(e.states).sort() }))
+    }))
+  }, [data, lookupQuery])
+
+  function exportRoutingReference() {
+    // Build a concise routing cheat sheet
+    const routeMap = {}
+    for (const r of data) {
+      const key = [r.sex, r.program, r.medication, r.drug, r.dosage, r.frequency].join('|')
+      if (!routeMap[key]) routeMap[key] = { sex: r.sex, program: r.program, medication: r.medication, drug: r.drug, dosage: r.dosage, frequency: r.frequency, pharmacies: {}, med_codes: new Set(), supply_codes: new Set() }
+      const pkey = r.pharmacy
+      if (!routeMap[key].pharmacies[pkey]) routeMap[key].pharmacies[pkey] = new Set()
+      if (r.state) routeMap[key].pharmacies[pkey].add(r.state)
+      if (r.med_code) routeMap[key].med_codes.add(r.med_code)
+      if (r.supply_code) routeMap[key].supply_codes.add(r.supply_code)
+    }
+    const lines = ['FOUNTAIN VITALITY - PHARMACY ROUTING REFERENCE', 'Generated: ' + new Date().toLocaleDateString(), '']
+    const entries = Object.values(routeMap).sort((a, b) => a.program.localeCompare(b.program) || a.medication.localeCompare(b.medication) || a.dosage.localeCompare(b.dosage))
+    let lastProgram = ''
+    for (const e of entries) {
+      if (e.program !== lastProgram) { lines.push('', '=== ' + (PROGRAM_LABELS[e.program] || e.program) + ' (' + e.sex + ') ===', ''); lastProgram = e.program }
+      const pharmList = Object.entries(e.pharmacies).map(([p, states]) => p + ' (' + states.size + ' states' + (states.size < 5 ? ': ' + Array.from(states).sort().join(', ') : '') + ')').join(' | ')
+      lines.push(e.medication + ' - ' + e.dosage + ' ' + e.frequency)
+      lines.push('  Pharmacy: ' + pharmList)
+      lines.push('  Med codes: ' + Array.from(e.med_codes).join(', ') + (e.supply_codes.size ? '  Supply: ' + Array.from(e.supply_codes).join(', ') : ''))
+    }
+    const blob = new Blob([lines.join('\n')], { type: 'text/plain' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'fountain_routing_reference.txt'
     a.click()
     URL.revokeObjectURL(url)
   }
@@ -383,6 +477,12 @@ export default function Dashboard() {
 
       <div style={styles.tabRow}>
         <button
+          style={activeTab === 'lookup' ? styles.tabActive : styles.tab}
+          onClick={() => { setActiveTab('lookup'); setSearch('') }}
+        >
+          Quick Lookup
+        </button>
+        <button
           style={activeTab === 'catalog' ? styles.tabActive : styles.tab}
           onClick={() => { setActiveTab('catalog'); setPage(0); setSearch('') }}
         >
@@ -418,7 +518,7 @@ export default function Dashboard() {
         <div style={{ position: "relative", flex: 1 }}>
           <input
             type="text"
-            placeholder="Search drugs, meds, codes, dosages..."
+            placeholder="Search by drug name, med code (e.g. 01M), or dosage..."
             value={search}
             onChange={e => { setSearch(e.target.value); setPage(0); setShowSuggestions(true) }}
             onFocus={() => setShowSuggestions(true)}
@@ -465,11 +565,70 @@ export default function Dashboard() {
             <option value="">All States</option>
             {(filterOptions.states || []).map(s => <option key={s}>{s}</option>)}
           </select>
+          <select value={medCodeFilter} onChange={e => { setMedCodeFilter(e.target.value); setPage(0) }} style={styles.select}>
+            <option value="">All Med Codes</option>
+            {(filterOptions.medCodes || []).map(c => <option key={c}>{c}</option>)}
+          </select>
           <select style={styles.select} value={filterPlan} onChange={e => { setFilterPlan(e.target.value); setPage(0) }}>
             <option value="">All Plans</option>
             {PLAN_OPTIONS.map(p => <option key={p} value={p}>{p}</option>)}
           </select>
           <button onClick={() => { setGroupPlans(g => !g); setPage(0) }} style={groupPlans ? styles.exportBtn : styles.resetBtn}>{groupPlans ? 'Plans Grouped' : 'Plans Expanded'}</button>
+          <button onClick={exportRoutingReference} style={{ ...styles.exportBtn, borderColor: '#bfdbfe', background: '#eff6ff', color: '#1e40af' }}>Routing Reference</button>
+        </div>
+      )}
+
+      {activeTab === 'lookup' && (
+        <div style={styles.tableWrap}>
+          <div style={{ maxWidth: 600, margin: '0 auto' }}>
+            <input
+              type="text"
+              placeholder="Type a medication name, drug, or med code..."
+              value={lookupQuery}
+              onChange={e => setLookupQuery(e.target.value)}
+              autoFocus
+              style={{ ...styles.searchInput, fontSize: 16, padding: '14px 16px', marginBottom: 20 }}
+            />
+            {lookupQuery.length >= 2 && lookupResults.length === 0 && (
+              <p style={{ color: '#64748b', textAlign: 'center', padding: 24 }}>No results for &ldquo;{lookupQuery}&rdquo;</p>
+            )}
+          </div>
+          {lookupResults.map((g, gi) => (
+            <div key={gi} style={{ background: '#ffffff', borderRadius: 12, padding: 20, marginBottom: 16, border: '1px solid #dbeafe', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                <div>
+                  <span style={{ color: '#1e293b', fontWeight: 700, fontSize: 18 }}>{g.medication}</span>
+                  <span style={{ color: '#64748b', fontSize: 13, marginLeft: 12 }}>{g.drug}</span>
+                </div>
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <span style={styles.tagBlue}>{PROGRAM_LABELS[g.program] || g.program}</span>
+                  <span style={styles.tag}>{g.sex}</span>
+                </div>
+              </div>
+              <div style={{ display: 'grid', gap: 10 }}>
+                {g.entries.map((e, ei) => (
+                  <div key={ei} style={{ background: '#f8fafc', borderRadius: 8, padding: 14, border: '1px solid #e2e8f0', display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '6px 16px', alignItems: 'center' }}>
+                    <span style={{ color: '#64748b', fontSize: 12, fontWeight: 600 }}>Dosage</span>
+                    <span style={{ color: '#1e293b', fontSize: 14, fontWeight: 600 }}>{e.dosage} &middot; {e.frequency}</span>
+                    <span style={{ color: '#64748b', fontSize: 12, fontWeight: 600 }}>Pharmacy</span>
+                    <span style={{ color: '#1e40af', fontSize: 14, fontWeight: 700 }}>{e.pharmacy}</span>
+                    <span style={{ color: '#64748b', fontSize: 12, fontWeight: 600 }}>Med Code</span>
+                    <span style={{ fontFamily: 'monospace', color: '#1e293b', fontSize: 14 }}>{e.med_code}{e.supply_code ? ' / ' + e.supply_code : ''}</span>
+                    <span style={{ color: '#64748b', fontSize: 12, fontWeight: 600 }}>Plans</span>
+                    <div style={styles.tagWrap}>{e.plans.map(p => <span key={p} style={styles.tag}>{p}</span>)}</div>
+                    <span style={{ color: '#64748b', fontSize: 12, fontWeight: 600 }}>States</span>
+                    <span style={{ color: '#475569', fontSize: 12 }}>{e.states.length} states{e.states.length <= 5 ? ': ' + e.states.join(', ') : ''}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+          {!lookupQuery && (
+            <div style={{ textAlign: 'center', padding: 48, color: '#94a3b8' }}>
+              <p style={{ fontSize: 18, marginBottom: 8 }}>Search for a medication above</p>
+              <p style={{ fontSize: 13 }}>Type a drug name, medication, or med code to see pharmacy routing, codes, and state availability at a glance.</p>
+            </div>
+          )}
         </div>
       )}
 
