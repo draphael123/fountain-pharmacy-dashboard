@@ -514,7 +514,7 @@ export default function Dashboard() {
         </button>}
       </div>
 
-      <div style={styles.filterBar}>
+      {activeTab !== 'lookup' && activeTab !== 'summary' && <div style={styles.filterBar}>
         <div style={{ position: "relative", flex: 1 }}>
           <input
             type="text"
@@ -550,7 +550,7 @@ export default function Dashboard() {
         )}
         <button onClick={resetFilters} style={styles.resetBtn}>Reset All</button>
         <button onClick={exportCSV} style={styles.exportBtn}>Export CSV</button>
-      </div>
+      </div>}
       {activeTab === 'catalog' && showAdvancedFilters && (
         <div style={{ ...styles.filterBar, borderTop: 'none', paddingTop: 0, boxShadow: 'none' }}>
           <select value={medFilter} onChange={e => { setMedFilter(e.target.value); setPage(0) }} style={styles.select}>
