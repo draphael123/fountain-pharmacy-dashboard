@@ -195,7 +195,7 @@ export default function Dashboard() {
       if (!stPharms) combos[key].byState[r.state] = [r.pharmacy]
       else if (!stPharms.includes(r.pharmacy)) stPharms.push(r.pharmacy)
     }
-    const variations = []
+    const rawVariations = []
     for (const c of Object.values(combos)) {
       const pharmSets = {}
       for (const [st, pharms] of Object.entries(c.byState)) {
@@ -204,13 +204,41 @@ export default function Dashboard() {
         pharmSets[key].push(st)
       }
       if (Object.keys(pharmSets).length > 1) {
-        variations.push({
+        rawVariations.push({
           medication: c.medication, drug: c.drug, dosage: c.dosage,
           frequency: c.frequency, sex: c.sex, payment_plan: c.payment_plan,
           routes: Object.entries(pharmSets).map(function(e) { return { pharmacies: e[0], states: e[1].sort(), count: e[1].length } })
         })
       }
     }
+    // Consolidate variations that share the same medication+drug+sex and identical routing pattern
+    const consolidated = {}
+    for (const v of rawVariations) {
+      const routeKey = v.routes.map(function(r) { return r.pharmacies + ':' + r.states.join(',') }).sort().join('|')
+      const groupKey = [v.medication, v.drug, v.sex, routeKey].join('||')
+      if (!consolidated[groupKey]) {
+        consolidated[groupKey] = {
+          medication: v.medication, drug: v.drug, sex: v.sex,
+          routes: v.routes,
+          combos: []
+        }
+      }
+      consolidated[groupKey].combos.push({ dosage: v.dosage, frequency: v.frequency, payment_plan: v.payment_plan })
+    }
+    const variations = Object.values(consolidated).map(function(g) {
+      const dosages = []; const freqs = []; const plans = []
+      for (const c of g.combos) {
+        if (dosages.indexOf(c.dosage) === -1) dosages.push(c.dosage)
+        if (freqs.indexOf(c.frequency) === -1) freqs.push(c.frequency)
+        if (plans.indexOf(c.payment_plan) === -1) plans.push(c.payment_plan)
+      }
+      return {
+        medication: g.medication, drug: g.drug, sex: g.sex,
+        dosage: dosages.join(', '), frequency: freqs.join(', '),
+        payment_plan: plans.join(', '),
+        routes: g.routes
+      }
+    })
     let v = variations
     if (search) {
       const s = search.toLowerCase()
