@@ -59,7 +59,10 @@ export default function Dashboard() {
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false)
   const [medCodeFilter, setMedCodeFilter] = useState('')
   const [lookupQuery, setLookupQuery] = useState('')
-  const PAGE_SIZE = 50
+  const [pageSize, setPageSize] = useState(50)
+  const [darkMode, setDarkMode] = useState(false)
+  const [hiddenCols, setHiddenCols] = useState(new Set())
+  const searchRef = React.useRef(null)
 
   // Sync filters FROM URL on mount
   useEffect(() => {
@@ -93,6 +96,22 @@ export default function Dashboard() {
     const newUrl = window.location.pathname + (qs ? '?' + qs : '')
     window.history.replaceState(null, '', newUrl)
   }, [activeTab, sexFilter, programFilter, medFilter, pharmacyFilter, stateFilter, filterPlan, medCodeFilter, search])
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    function handleKey(e) {
+      if (e.key === '/' && !e.ctrlKey && !e.metaKey && document.activeElement.tagName !== 'INPUT' && document.activeElement.tagName !== 'TEXTAREA') {
+        e.preventDefault()
+        if (searchRef.current) searchRef.current.focus()
+      }
+      if (e.key === 'Escape') {
+        resetFilters()
+        if (document.activeElement) document.activeElement.blur()
+      }
+    }
+    window.addEventListener('keydown', handleKey)
+    return () => window.removeEventListener('keydown', handleKey)
+  }, [])
 
   useEffect(() => {
     Promise.allSettled([
@@ -160,10 +179,11 @@ export default function Dashboard() {
   }, [filtered, sortCol, sortDir])
 
   const pagedData = useMemo(() => {
-    return sortedData.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE)
-  }, [sortedData, page])
+    if (pageSize === 'all') return sortedData
+    return sortedData.slice(page * pageSize, (page + 1) * pageSize)
+  }, [sortedData, page, pageSize])
 
-  const totalPages = Math.ceil(filtered.length / PAGE_SIZE)
+  const totalPages = pageSize === 'all' ? 1 : Math.ceil(filtered.length / pageSize)
 
   // Build index: for each unique row key → list of states
   const stateIndex = useMemo(() => {
@@ -318,6 +338,42 @@ export default function Dashboard() {
     return v
   }, [data, search])
 
+  function relativeTime(dateStr) {
+    if (!dateStr) return ''
+    const d = new Date(dateStr)
+    if (isNaN(d)) return dateStr
+    const now = new Date()
+    const diff = Math.floor((now - d) / 86400000)
+    if (diff === 0) return 'today'
+    if (diff === 1) return 'yesterday'
+    if (diff < 7) return diff + ' days ago'
+    if (diff < 30) return Math.floor(diff / 7) + ' week' + (Math.floor(diff / 7) > 1 ? 's' : '') + ' ago'
+    return Math.floor(diff / 30) + ' month' + (Math.floor(diff / 30) > 1 ? 's' : '') + ' ago'
+  }
+
+  const activeFilters = useMemo(() => {
+    const chips = []
+    if (sexFilter) chips.push({ label: 'Sex: ' + sexFilter, clear: () => setSexFilter('') })
+    if (programFilter) chips.push({ label: 'Program: ' + (PROGRAM_LABELS[programFilter] || programFilter), clear: () => setProgramFilter('') })
+    if (medFilter) chips.push({ label: 'Med: ' + medFilter, clear: () => setMedFilter('') })
+    if (pharmacyFilter) chips.push({ label: 'Pharmacy: ' + pharmacyFilter, clear: () => setPharmacyFilter('') })
+    if (stateFilter) chips.push({ label: 'State: ' + stateFilter, clear: () => setStateFilter('') })
+    if (medCodeFilter) chips.push({ label: 'Code: ' + medCodeFilter, clear: () => setMedCodeFilter('') })
+    if (filterPlan) chips.push({ label: 'Plan: ' + filterPlan, clear: () => setFilterPlan('') })
+    if (search) chips.push({ label: 'Search: "' + search + '"', clear: () => setSearch('') })
+    return chips
+  }, [sexFilter, programFilter, medFilter, pharmacyFilter, stateFilter, medCodeFilter, filterPlan, search])
+
+  const COL_NAMES = ['Sex','Program','Medication','Drug','Dosage','Freq','Pharmacy','Med Code','Supply Code','Plan']
+
+  function toggleCol(idx) {
+    setHiddenCols(prev => {
+      const next = new Set(prev)
+      if (next.has(idx)) next.delete(idx); else next.add(idx)
+      return next
+    })
+  }
+
   function resetFilters() {
     setSexFilter('')
     setProgramFilter('')
@@ -399,42 +455,57 @@ export default function Dashboard() {
     URL.revokeObjectURL(url)
   }
 
+  // Dark mode palette
+  const dm = darkMode ? {
+    bg: '#0f172a', card: '#1e293b', border: '#334155', text: '#e2e8f0', muted: '#94a3b8', accent: '#60a5fa', accentDark: '#1e3a5f', headerBg: '#1e293b', rowAlt: '#162032', hover: '#1e3a5f', inputBg: '#0f172a', inputBorder: '#475569'
+  } : {
+    bg: '#f0f7ff', card: '#ffffff', border: '#dbeafe', text: '#1e293b', muted: '#64748b', accent: '#1e40af', accentDark: '#dbeafe', headerBg: '#ffffff', rowAlt: '#f8fafc', hover: '#eff6ff', inputBg: '#f8fafc', inputBorder: '#cbd5e1'
+  }
+
   if (loading) {
     return (
-      <div style={styles.loadingContainer}>
-        <div style={styles.spinner} />
-        <p style={styles.loadingText}>Loading pharmacy data...</p>
+      <div style={{ ...styles.loadingContainer, background: dm.bg }}>
+        <div style={{ maxWidth: 1400, width: '100%', padding: '0 24px' }}>
+          <div style={{ height: 60, background: dm.card, borderRadius: 12, marginBottom: 24, animation: 'pulse 1.5s ease-in-out infinite' }} />
+          <div style={{ display: 'flex', gap: 16, marginBottom: 24 }}>{[1,2,3,4,5].map(i => <div key={i} style={{ flex: 1, height: 72, background: dm.card, borderRadius: 12, animation: 'pulse 1.5s ease-in-out infinite', animationDelay: i * 100 + 'ms' }} />)}</div>
+          <div style={{ height: 48, background: dm.card, borderRadius: 8, marginBottom: 12, animation: 'pulse 1.5s ease-in-out infinite' }} />
+          {[1,2,3,4,5,6,7,8].map(i => <div key={i} style={{ height: 36, background: dm.card, borderRadius: 4, marginBottom: 4, animation: 'pulse 1.5s ease-in-out infinite', animationDelay: i * 50 + 'ms' }} />)}
+        </div>
       </div>
     )
   }
 
   return (
-    <div style={styles.container}>
+    <div style={{ ...styles.container, background: dm.bg, color: dm.text }}>
       <style>{`
-        .dash-row:hover { background: #eff6ff !important; }
+        .dash-row:hover { background: ${dm.hover} !important; }
         .dash-th { cursor: pointer; user-select: none; }
-        .dash-th:hover { color: #1e40af; }
+        .dash-th:hover { color: ${dm.accent}; }
+        @keyframes pulse { 0%,100% { opacity: 0.4; } 50% { opacity: 0.8; } }
+        @media print { .no-print { display: none !important; } .dash-row:hover { background: transparent !important; } body { background: #fff !important; color: #000 !important; } }
+        @media (max-width: 768px) { .hide-mobile { display: none !important; } .mobile-card { display: block !important; } }
       `}</style>
-      <header style={styles.header}>
+      <header style={{ ...styles.header, background: dm.headerBg, borderColor: dm.border }} className="no-print">
         <div style={styles.headerInner}>
           <div style={{display:'flex',alignItems:'center',gap:'16px'}}>
             <img src="https://framerusercontent.com/images/LE6M6GYbhCcJvlv3VhjTi7wIw.png" alt="Fountain" style={{height:28}} />
             <div>
-            <h1 style={styles.title}>Pharmacy Dashboard</h1>
-            <p style={styles.subtitle}>
+            <h1 style={{ ...styles.title, color: dm.accent }}>Pharmacy Dashboard</h1>
+            <p style={{ ...styles.subtitle, color: dm.muted }}>
               Medication catalog, pharmacy routing, and state-by-state variation analysis
             </p>
-            {summary && summary.scrape_date && <p style={{fontSize:12,color:'#64748b',margin:'4px 0 0 0'}}>Data last updated: {summary.scrape_date}</p>}
+            {summary && summary.scrape_date && <p style={{fontSize:12,color:darkMode?'#94a3b8':'#64748b',margin:'4px 0 0 0'}}>Data last updated: {summary.scrape_date} ({relativeTime(summary.scrape_date)})</p>}
           </div>
           </div>
           <div style={styles.headerMeta}>
+            <button onClick={() => setDarkMode(d => !d)} style={{ padding: '6px 14px', borderRadius: 8, border: '1px solid ' + (darkMode ? '#475569' : '#cbd5e1'), background: darkMode ? '#1e293b' : '#f8fafc', color: darkMode ? '#e2e8f0' : '#334155', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>{darkMode ? '☀ Light' : '● Dark'}</button>
           </div>
         </div>
       </header>
 
-      <section style={styles.infoSection}>
-        <div onClick={() => setShowInfo(!showInfo)} style={{display:'flex',alignItems:'center',justifyContent:'space-between',cursor:'pointer',padding:'12px 20px',background:'#ffffff',borderRadius:12,border:'1px solid #dbeafe'}}>
-          <h2 style={{...styles.infoTitle, margin:0}}>How This Dashboard Works</h2>
+      <section style={styles.infoSection} className="no-print">
+        <div onClick={() => setShowInfo(!showInfo)} style={{display:'flex',alignItems:'center',justifyContent:'space-between',cursor:'pointer',padding:'12px 20px',background:dm.card,borderRadius:12,border:'1px solid ' + dm.border}}>
+          <h2 style={{...styles.infoTitle, margin:0, color: dm.text}}>How This Dashboard Works</h2>
           <span style={{fontSize:20,color:'#3b82f6',transition:'transform 0.2s',transform:showInfo?'rotate(180deg)':'rotate(0deg)'}}>▼</span>
         </div>
         {showInfo && <div style={{...styles.infoGrid, marginTop:12}}>
@@ -468,63 +539,32 @@ export default function Dashboard() {
         </div>}
       </section>
 
-      <section style={styles.statsRow}>
-        <StatCard label="States" value={liveStats.states} />
-        <StatCard label="Programs" value={liveStats.programs} />
-        <StatCard label="Medications" value={liveStats.medications} />
-        <StatCard label="Pharmacies" value={liveStats.pharmacies} />
-        <StatCard label="Variations" value={routingVariations.length} alert />
+      <section style={styles.statsRow} className="no-print">
+        <StatCard label="States" value={liveStats.states} dm={dm} />
+        <StatCard label="Programs" value={liveStats.programs} dm={dm} />
+        <StatCard label="Medications" value={liveStats.medications} dm={dm} />
+        <StatCard label="Pharmacies" value={liveStats.pharmacies} dm={dm} />
+        <StatCard label="Variations" value={routingVariations.length} alert dm={dm} />
       </section>
 
-      <div style={styles.tabRow}>
-        <button
-          style={activeTab === 'lookup' ? styles.tabActive : styles.tab}
-          onClick={() => { setActiveTab('lookup'); setSearch('') }}
-        >
-          Quick Lookup
-        </button>
-        <button
-          style={activeTab === 'catalog' ? styles.tabActive : styles.tab}
-          onClick={() => { setActiveTab('catalog'); setPage(0); setSearch('') }}
-        >
-          Medication Catalog
-        </button>
-        <button
-          style={activeTab === 'variations' ? styles.tabActive : styles.tab}
-          onClick={() => { setActiveTab('variations'); setPage(0); setSearch('') }}
-        >
-          Routing Variations ({routingVariations.length})
-        </button>
-        <button
-          style={activeTab === 'summary' ? styles.tabActive : styles.tab}
-          onClick={() => { setActiveTab('summary'); setSearch('') }}
-        >
-          Summary
-        </button>
-        <button
-          style={activeTab === 'formulary' ? styles.tabActive : styles.tab}
-          onClick={() => { setActiveTab('formulary'); setSearch('') }}
-        >
-          Formulary
-        </button>
-        {changelog && <button
-          style={activeTab === 'changelog' ? styles.tabActive : styles.tab}
-          onClick={() => { setActiveTab('changelog'); setSearch('') }}
-        >
-          Change Log
-        </button>}
+      <div style={styles.tabRow} className="no-print">
+        {[['lookup','Quick Lookup'],['catalog','Medication Catalog'],['variations','Routing Variations (' + routingVariations.length + ')'],['summary','Summary'],['formulary','Formulary']].map(([key,label]) => (
+          <button key={key} style={activeTab === key ? { ...styles.tabActive, background: dm.card, color: dm.accent } : { ...styles.tab, background: darkMode ? '#162032' : '#e0ecff', color: dm.accent }} onClick={() => { setActiveTab(key); if (key !== 'lookup') setPage(0); setSearch('') }}>{label}</button>
+        ))}
+        {changelog && <button style={activeTab === 'changelog' ? { ...styles.tabActive, background: dm.card, color: dm.accent } : { ...styles.tab, background: darkMode ? '#162032' : '#e0ecff', color: dm.accent }} onClick={() => { setActiveTab('changelog'); setSearch('') }}>Change Log</button>}
       </div>
 
-      {activeTab !== 'lookup' && activeTab !== 'summary' && <div style={styles.filterBar}>
+      {activeTab !== 'lookup' && activeTab !== 'summary' && <div style={{ ...styles.filterBar, background: dm.card, borderColor: dm.border }} className="no-print">
         <div style={{ position: "relative", flex: 1 }}>
           <input
+            ref={searchRef}
             type="text"
-            placeholder="Search by drug name, med code (e.g. 01M), or dosage..."
+            placeholder="Search by drug name, med code, or dosage... (press / to focus)"
             value={search}
             onChange={e => { setSearch(e.target.value); setPage(0); setShowSuggestions(true) }}
             onFocus={() => setShowSuggestions(true)}
             onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
-            style={styles.searchInput}
+            style={{ ...styles.searchInput, background: dm.inputBg, borderColor: dm.inputBorder, color: dm.text }}
           />
           {showSuggestions && searchSuggestions.length > 0 && (
             <div style={styles.suggestBox}>
@@ -576,6 +616,24 @@ export default function Dashboard() {
           </select>
           <button onClick={() => { setGroupPlans(g => !g); setPage(0) }} style={groupPlans ? styles.exportBtn : styles.resetBtn}>{groupPlans ? 'Plans Grouped' : 'Plans Expanded'}</button>
           <button onClick={exportRoutingReference} style={{ ...styles.exportBtn, borderColor: '#bfdbfe', background: '#eff6ff', color: '#1e40af' }}>Routing Reference</button>
+        </div>
+      )}
+
+      {activeFilters.length > 0 && activeTab !== 'lookup' && activeTab !== 'summary' && (
+        <div style={{ maxWidth: 1400, margin: '0 auto', padding: '8px 24px', display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+          <span style={{ fontSize: 12, color: dm.muted, fontWeight: 600 }}>Active:</span>
+          {activeFilters.map((f, i) => (
+            <span key={i} onClick={f.clear} style={{ background: darkMode ? '#1e3a5f' : '#dbeafe', color: darkMode ? '#93c5fd' : '#1e40af', padding: '3px 10px', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}>{f.label} <span style={{ fontSize: 14, lineHeight: 1 }}>&times;</span></span>
+          ))}
+        </div>
+      )}
+
+      {activeTab === 'catalog' && (
+        <div style={{ maxWidth: 1400, margin: '0 auto', padding: '4px 24px', display: 'flex', gap: 4, flexWrap: 'wrap', alignItems: 'center' }}>
+          <span style={{ fontSize: 11, color: dm.muted, marginRight: 4 }}>Columns:</span>
+          {COL_NAMES.map((c, i) => (
+            <button key={c} onClick={() => toggleCol(i)} style={{ padding: '2px 8px', borderRadius: 4, border: '1px solid ' + (hiddenCols.has(i) ? (darkMode ? '#334155' : '#e2e8f0') : (darkMode ? '#1e3a5f' : '#bfdbfe')), background: hiddenCols.has(i) ? 'transparent' : (darkMode ? '#1e3a5f' : '#eff6ff'), color: hiddenCols.has(i) ? dm.muted : dm.accent, cursor: 'pointer', fontSize: 11, fontWeight: 600 }}>{c}</button>
+          ))}
         </div>
       )}
 
@@ -635,42 +693,55 @@ export default function Dashboard() {
 
       {activeTab === 'catalog' && (
         <div style={styles.tableWrap}>
-          <div style={styles.resultCount}>{filtered.length.toLocaleString()} results (page {page + 1}/{totalPages || 1})</div>
+          <div style={{ ...styles.resultCount, color: dm.muted, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span>{filtered.length.toLocaleString()} results {pageSize !== 'all' && '(page ' + (page + 1) + '/' + (totalPages || 1) + ')'}</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }} className="no-print">
+              <span style={{ fontSize: 12 }}>Rows:</span>
+              <select value={pageSize} onChange={e => { setPageSize(e.target.value === 'all' ? 'all' : Number(e.target.value)); setPage(0) }} style={{ ...styles.select, background: dm.inputBg, borderColor: dm.inputBorder, color: dm.text, padding: '4px 8px', fontSize: 12 }}>
+                {[25,50,100].map(n => <option key={n} value={n}>{n}</option>)}
+                <option value="all">All</option>
+              </select>
+            </div>
+          </div>
+          {filtered.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: 48, color: dm.muted }}>
+              <p style={{ fontSize: 20, marginBottom: 8 }}>No medications match these filters</p>
+              <p style={{ fontSize: 13 }}>Try removing some filters or broadening your search. <span onClick={resetFilters} style={{ color: dm.accent, cursor: 'pointer', textDecoration: 'underline' }}>Reset all filters</span></p>
+            </div>
+          ) : (
+          <div style={{ overflowX: 'auto' }}>
           <table style={styles.table}>
             <thead>
               <tr>
-                {['Sex','Program','Medication','Drug','Dosage','Freq','Pharmacy','Med Code','Supply Code','Plan'].map((h, idx) => {
+                {COL_NAMES.map((h, idx) => {
+                  if (hiddenCols.has(idx)) return null
                   const key = SORT_KEYS[idx]
                   const active = sortCol === key
-                  return <th key={h} className="dash-th" style={{...styles.th, color: active ? '#1e40af' : undefined}} onClick={() => { if (active) { setSortDir(d => -d) } else { setSortCol(key); setSortDir(1) } }}>{h}{active ? (sortDir === 1 ? ' ▲' : ' ▼') : ''}</th>
+                  const isFirst = !hiddenCols.has(idx) && Array.from({length: idx}, (_, j) => j).every(j => hiddenCols.has(j))
+                  return <th key={h} className="dash-th" style={{...styles.th, background: darkMode ? '#162032' : '#f0f7ff', color: active ? dm.accent : dm.muted, borderColor: dm.border, ...(isFirst ? { position: 'sticky', left: 0, zIndex: 2, background: darkMode ? '#162032' : '#f0f7ff' } : {})}} onClick={() => { if (active) { setSortDir(d => -d) } else { setSortCol(key); setSortDir(1) } }}>{h}{active ? (sortDir === 1 ? ' ▲' : ' ▼') : ''}</th>
                 })}
               </tr>
             </thead>
             <tbody>
               {pagedData.map((r, i) => {
-                const rowKey = [r.sex, r.program, r.medication, r.drug, r.dosage, r.frequency, r.pharmacy, r.med_code, r.supply_code].join('|')
                 const isExpanded = expandedRow === page + '_' + i
+                const vals = [r.sex, PROGRAM_LABELS[r.program] || r.program, r.medication, r.drug, r.dosage, r.frequency, r.pharmacy, r.med_code, r.supply_code, r._plans ? sortPlans(r._plans).join(', ') : r.payment_plan]
                 return (
                   <React.Fragment key={i}>
-                    <tr className="dash-row" style={{...(i % 2 ? styles.rowAlt : styles.row), cursor: 'pointer'}} onClick={() => setExpandedRow(isExpanded ? null : page + '_' + i)}>
-                      <td style={styles.td}>{r.sex}</td>
-                      <td style={styles.td}>{PROGRAM_LABELS[r.program] || r.program}</td>
-                      <td style={styles.td}>{r.medication}</td>
-                      <td style={styles.td}>{r.drug}</td>
-                      <td style={styles.td}>{r.dosage}</td>
-                      <td style={styles.td}>{r.frequency}</td>
-                      <td style={styles.td}>{r.pharmacy}</td>
-                      <td style={{...styles.td, fontFamily: 'monospace'}}>{r.med_code}</td>
-                      <td style={{...styles.td, fontFamily: 'monospace'}}>{r.supply_code}</td>
-                      <td style={styles.td}>{r._plans ? sortPlans(r._plans).join(', ') : r.payment_plan}</td>
+                    <tr className="dash-row" style={{ background: i % 2 ? dm.rowAlt : dm.card, cursor: 'pointer' }} onClick={() => setExpandedRow(isExpanded ? null : page + '_' + i)}>
+                      {vals.map((v, idx) => {
+                        if (hiddenCols.has(idx)) return null
+                        const isFirst = !hiddenCols.has(idx) && Array.from({length: idx}, (_, j) => j).every(j => hiddenCols.has(j))
+                        return <td key={idx} style={{...styles.td, color: dm.text, borderColor: dm.border, ...(idx >= 7 && idx <= 8 ? { fontFamily: 'monospace' } : {}), ...(isFirst ? { position: 'sticky', left: 0, zIndex: 1, background: i % 2 ? dm.rowAlt : dm.card } : {})}}>{v}</td>
+                      })}
                     </tr>
                     {isExpanded && (
-                      <tr style={{ background: '#f0f7ff' }}>
-                        <td colSpan={10} style={{ padding: '12px 16px', borderBottom: '1px solid #dbeafe' }}>
+                      <tr style={{ background: darkMode ? '#162032' : '#f0f7ff' }}>
+                        <td colSpan={10 - hiddenCols.size} style={{ padding: '12px 16px', borderBottom: '1px solid ' + dm.border }}>
                           <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
-                            <span style={{ color: '#1e40af', fontWeight: 600, fontSize: 12, whiteSpace: 'nowrap' }}>Available in {getStatesForRow(r).length} states:</span>
+                            <span style={{ color: dm.accent, fontWeight: 600, fontSize: 12, whiteSpace: 'nowrap' }}>Available in {getStatesForRow(r).length} states:</span>
                             <div style={styles.tagWrap}>
-                              {getStatesForRow(r).map(s => <span key={s} style={styles.tag}>{s}</span>)}
+                              {getStatesForRow(r).map(s => <span key={s} style={{ ...styles.tag, background: darkMode ? '#1e3a5f' : '#f0f7ff', color: dm.accent, borderColor: dm.border }}>{s}</span>)}
                             </div>
                           </div>
                         </td>
@@ -681,13 +752,15 @@ export default function Dashboard() {
               })}
             </tbody>
           </table>
-          {totalPages > 1 && (
-            <div style={styles.pagination}>
-              <button style={styles.pageBtn} disabled={page === 0} onClick={() => setPage(0)}>&laquo; First</button>
-              <button style={styles.pageBtn} disabled={page === 0} onClick={() => setPage(p => p - 1)}>&lsaquo; Prev</button>
-              <span style={styles.pageInfo}>Page {page + 1} of {totalPages}</span>
-              <button style={styles.pageBtn} disabled={page >= totalPages - 1} onClick={() => setPage(p => p + 1)}>Next &rsaquo;</button>
-              <button style={styles.pageBtn} disabled={page >= totalPages - 1} onClick={() => setPage(totalPages - 1)}>Last &raquo;</button>
+          </div>
+          )}
+          {totalPages > 1 && pageSize !== 'all' && (
+            <div style={styles.pagination} className="no-print">
+              <button style={{ ...styles.pageBtn, background: dm.card, borderColor: dm.inputBorder, color: dm.accent }} disabled={page === 0} onClick={() => setPage(0)}>&laquo; First</button>
+              <button style={{ ...styles.pageBtn, background: dm.card, borderColor: dm.inputBorder, color: dm.accent }} disabled={page === 0} onClick={() => setPage(p => p - 1)}>&lsaquo; Prev</button>
+              <span style={{ ...styles.pageInfo, color: dm.muted }}>Page {page + 1} of {totalPages}</span>
+              <button style={{ ...styles.pageBtn, background: dm.card, borderColor: dm.inputBorder, color: dm.accent }} disabled={page >= totalPages - 1} onClick={() => setPage(p => p + 1)}>Next &rsaquo;</button>
+              <button style={{ ...styles.pageBtn, background: dm.card, borderColor: dm.inputBorder, color: dm.accent }} disabled={page >= totalPages - 1} onClick={() => setPage(totalPages - 1)}>Last &raquo;</button>
             </div>
           )}
         </div>
@@ -784,8 +857,8 @@ export default function Dashboard() {
 
       {activeTab === 'summary' && summary && (
         <div style={styles.summaryWrap}>
-          <div style={styles.summarySection}>
-            <h3 style={styles.summaryTitle}>States ({summary.states?.length})</h3>
+          <div style={{ ...styles.summarySection, background: dm.card, borderColor: dm.border }}>
+            <h3 style={{ ...styles.summaryTitle, color: dm.text }}>States ({summary.states?.length})</h3>
             <div style={styles.tagWrap}>
               {(summary.states || []).map(s => <span key={s} style={styles.tag}>{s}</span>)}
             </div>
@@ -834,18 +907,18 @@ export default function Dashboard() {
         </div>
       )}
 
-      <footer style={styles.footer}>
-        <p>Fountain Pharmacy Dashboard &middot; Data scraped from EHR portal &middot; {summary?.scrape_date}</p>
+      <footer style={{ ...styles.footer, color: dm.muted }}>
+        <p>Fountain Pharmacy Dashboard &middot; Data scraped from EHR portal &middot; {summary?.scrape_date} &middot; Press <kbd style={{ background: dm.card, border: '1px solid ' + dm.border, borderRadius: 3, padding: '1px 5px', fontSize: 11 }}>/</kbd> to search, <kbd style={{ background: dm.card, border: '1px solid ' + dm.border, borderRadius: 3, padding: '1px 5px', fontSize: 11 }}>Esc</kbd> to clear</p>
       </footer>
     </div>
   )
 }
 
-function StatCard({ label, value, alert }) {
+function StatCard({ label, value, alert, dm }) {
   return (
-    <div style={{...styles.statCard, ...(alert ? styles.statCardAlert : {})}}>
-      <div style={styles.statValue}>{typeof value === 'number' ? value.toLocaleString() : value}</div>
-      <div style={styles.statLabel}>{label}</div>
+    <div style={{...styles.statCard, background: dm.card, borderColor: dm.border, ...(alert ? { background: dm.card, borderColor: '#fecaca' } : {})}}>
+      <div style={{ ...styles.statValue, color: alert ? '#ef4444' : dm.accent }}>{typeof value === 'number' ? value.toLocaleString() : value}</div>
+      <div style={{ ...styles.statLabel, color: dm.muted }}>{label}</div>
     </div>
   )
 }
