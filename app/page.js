@@ -261,7 +261,7 @@ export default function Dashboard() {
       <header style={styles.header}>
         <div style={styles.headerInner}>
           <div style={{display:'flex',alignItems:'center',gap:'16px'}}>
-            <img src="https://framerusercontent.com/images/TUOPymBCd2ZpwLZVUecqAX7Yo.png" alt="Fountain" style={{width:36,height:36}} /><img src="https://framerusercontent.com/images/LE6M6GYbhCcJvlv3VhjTi7wIw.png" alt="Fountain" style={{height:28}} />
+            <img src="https://framerusercontent.com/images/LE6M6GYbhCcJvlv3VhjTi7wIw.png" alt="Fountain" style={{height:28}} />
             <div>
             <h1 style={styles.title}>Pharmacy Dashboard</h1>
             <p style={styles.subtitle}>
