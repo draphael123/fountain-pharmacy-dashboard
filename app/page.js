@@ -43,6 +43,7 @@ export default function Dashboard() {
   const [programFilter, setProgramFilter] = useState('')
   const [medFilter, setMedFilter] = useState('')
   const [pharmacyFilter, setPharmacyFilter] = useState('')
+  const [stateFilter, setStateFilter] = useState('')
   const [search, setSearch] = useState('')
   const [showSuggestions, setShowSuggestions] = useState(false)
   const [showInfo, setShowInfo] = useState(false)
@@ -52,6 +53,7 @@ export default function Dashboard() {
 
   const [activeTab, setActiveTab] = useState('catalog')
   const [page, setPage] = useState(0)
+  const [groupPlans, setGroupPlans] = useState(true)
   const PAGE_SIZE = 50
 
   useEffect(() => {
@@ -78,6 +80,7 @@ export default function Dashboard() {
     if (programFilter) f = f.filter(r => r.program === programFilter)
     if (medFilter) f = f.filter(r => r.medication === medFilter)
     if (pharmacyFilter) f = f.filter(r => r.pharmacy === pharmacyFilter)
+    if (stateFilter) f = f.filter(r => r.state === stateFilter)
     if (filterPlan) f = f.filter(r => r.payment_plan === filterPlan)
     if (search) {
       const s = search.toLowerCase()
@@ -91,12 +94,22 @@ export default function Dashboard() {
     // Deduplicate: without state column, collapse identical rows
     const seen = new Set()
     const unique = []
+    if (groupPlans && !filterPlan) {
+      // Collapse rows that differ only by payment_plan
+      const planGroups = {}
+      for (const r of f) {
+        const key = [r.sex, r.program, r.medication, r.drug, r.dosage, r.frequency, r.pharmacy, r.med_code, r.supply_code].join('|')
+        if (!planGroups[key]) planGroups[key] = { ...r, _plans: [] }
+        if (!planGroups[key]._plans.includes(r.payment_plan)) planGroups[key]._plans.push(r.payment_plan)
+      }
+      return Object.values(planGroups)
+    }
     for (const r of f) {
       const key = [r.sex, r.program, r.medication, r.drug, r.dosage, r.frequency, r.pharmacy, r.med_code, r.supply_code, r.payment_plan].join('|')
       if (!seen.has(key)) { seen.add(key); unique.push(r) }
     }
     return unique
-  }, [data, sexFilter, programFilter, medFilter, pharmacyFilter, search, filterPlan])
+  }, [data, sexFilter, programFilter, medFilter, pharmacyFilter, stateFilter, search, filterPlan, groupPlans])
 
   const sortedData = useMemo(() => {
     if (!sortCol) return filtered
@@ -116,11 +129,12 @@ export default function Dashboard() {
   const filterOptions = useMemo(() => {
     let f = data
     const programs = sorted(new Set(f.map(r => r.program)))
+    const states = sorted(new Set(f.map(r => r.state).filter(Boolean)))
     if (sexFilter) f = f.filter(r => r.sex === sexFilter)
     if (programFilter) f = f.filter(r => r.program === programFilter)
     const meds = sorted(new Set(f.map(r => r.medication)))
     const pharmacies = sorted(new Set(f.map(r => r.pharmacy).filter(Boolean)))
-    return { programs, meds, pharmacies }
+    return { programs, meds, pharmacies, states }
   }, [data, sexFilter, programFilter])
 
   const liveStats = useMemo(() => {
@@ -252,6 +266,7 @@ export default function Dashboard() {
     setProgramFilter('')
     setMedFilter('')
     setPharmacyFilter('')
+    setStateFilter('')
     setFilterPlan('')
     setSearch('')
     setPage(0)
@@ -350,34 +365,34 @@ export default function Dashboard() {
       <div style={styles.tabRow}>
         <button
           style={activeTab === 'catalog' ? styles.tabActive : styles.tab}
-          onClick={() => { setActiveTab('catalog'); setPage(0) }}
+          onClick={() => { setActiveTab('catalog'); setPage(0); setSearch('') }}
         >
           Medication Catalog
         </button>
         <button
           style={activeTab === 'variations' ? styles.tabActive : styles.tab}
-          onClick={() => { setActiveTab('variations'); setPage(0) }}
+          onClick={() => { setActiveTab('variations'); setPage(0); setSearch('') }}
         >
           Routing Variations ({routingVariations.length})
         </button>
         <button
           style={activeTab === 'summary' ? styles.tabActive : styles.tab}
-          onClick={() => setActiveTab('summary')}
+          onClick={() => { setActiveTab('summary'); setSearch('') }}
         >
           Summary
         </button>
         <button
           style={activeTab === 'formulary' ? styles.tabActive : styles.tab}
-          onClick={() => setActiveTab('formulary')}
+          onClick={() => { setActiveTab('formulary'); setSearch('') }}
         >
           Formulary
         </button>
-        <button
+        {changelog && <button
           style={activeTab === 'changelog' ? styles.tabActive : styles.tab}
-          onClick={() => setActiveTab('changelog')}
+          onClick={() => { setActiveTab('changelog'); setSearch('') }}
         >
           Change Log
-        </button>
+        </button>}
       </div>
 
       <div style={styles.filterBar}>
@@ -419,6 +434,10 @@ export default function Dashboard() {
               <option value="">All Pharmacies</option>
               {(filterOptions.pharmacies || []).map(p => <option key={p}>{p}</option>)}
             </select>
+            <select value={stateFilter} onChange={e => { setStateFilter(e.target.value); setPage(0) }} style={styles.select}>
+              <option value="">All States</option>
+              {(filterOptions.states || []).map(s => <option key={s}>{s}</option>)}
+            </select>
           <select style={styles.filterSelect} value={filterPlan} onChange={e => { setFilterPlan(e.target.value); setPage(0) }}>
             <option value="">All Plans</option>
             {PLAN_OPTIONS.map(p => <option key={p} value={p}>{p}</option>)}
@@ -426,6 +445,7 @@ export default function Dashboard() {
           </>
         )}
         <button onClick={resetFilters} style={styles.resetBtn}>Reset All</button>
+        {activeTab === 'catalog' && <button onClick={() => { setGroupPlans(g => !g); setPage(0) }} style={groupPlans ? styles.exportBtn : styles.resetBtn}>{groupPlans ? 'Plans Grouped' : 'Plans Expanded'}</button>}
           <button onClick={exportCSV} style={styles.exportBtn}>Export CSV</button>
       </div>
 
@@ -454,7 +474,7 @@ export default function Dashboard() {
                   <td style={styles.td}>{r.pharmacy}</td>
                   <td style={{...styles.td, fontFamily: 'monospace'}}>{r.med_code}</td>
                   <td style={{...styles.td, fontFamily: 'monospace'}}>{r.supply_code}</td>
-                  <td style={styles.td}>{r.payment_plan}</td>
+                  <td style={styles.td}>{r._plans ? r._plans.sort().join(', ') : r.payment_plan}</td>
                 </tr>
               ))}
             </tbody>
@@ -613,7 +633,7 @@ export default function Dashboard() {
       )}
 
       <footer style={styles.footer}>
-        <p>Fountain Pharmacy Dashboard Â· Data scraped from EHR portal Â· {summary?.scrape_date}</p>
+        <p>Fountain Pharmacy Dashboard &middot; Data scraped from EHR portal &middot; {summary?.scrape_date}</p>
       </footer>
     </div>
   )
@@ -656,6 +676,7 @@ const styles = {
   tabActive: { padding: '10px 20px', borderRadius: '8px 8px 0 0', border: 'none', background: '#ffffff', color: '#1e40af', cursor: 'pointer', fontSize: 14, fontWeight: 700, boxShadow: '0 -1px 3px rgba(0,0,0,0.05)' },
   filterBar: { display: 'flex', gap: 8, maxWidth: 1400, margin: '0 auto', padding: '16px 24px', background: '#ffffff', flexWrap: 'wrap', alignItems: 'center', borderBottom: '1px solid #e2e8f0', position: 'sticky', top: 0, zIndex: 100, boxShadow: '0 2px 8px rgba(0,0,0,0.06)' },
   searchInput: { padding: '8px 12px', borderRadius: 6, border: '1px solid #cbd5e1', background: '#f8fafc', color: '#1e293b', fontSize: 13, width: '100%' },
+  select: { padding: '8px 12px', borderRadius: 6, border: '1px solid #cbd5e1', background: '#f8fafc', color: '#1e293b', fontSize: 13 },
   filterSelect: { padding: '8px 12px', borderRadius: 6, border: '1px solid #cbd5e1', background: '#f8fafc', color: '#1e293b', fontSize: 13 },
   resetBtn: { padding: '6px 16px', borderRadius: 6, border: '1px solid #fecaca', background: '#fef2f2', color: '#dc2626', cursor: 'pointer', fontSize: 13, fontWeight: 600 },
   exportBtn: { padding: '6px 16px', borderRadius: 6, border: '1px solid #bbf7d0', background: '#f0fdf4', color: '#16a34a', cursor: 'pointer', fontSize: 13, fontWeight: 600 },
@@ -664,8 +685,11 @@ const styles = {
   table: { width: '100%', borderCollapse: 'collapse', fontSize: 13 },
   th: { textAlign: 'left', padding: '10px 12px', borderBottom: '2px solid #dbeafe', color: '#1e40af', fontWeight: 700, fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.5, background: '#f0f7ff' },
   td: { padding: '8px 12px', borderBottom: '1px solid #e2e8f0', color: '#334155' },
+  row: { background: '#ffffff' },
+  rowAlt: { background: '#f8fafc' },
   rowEven: { background: '#ffffff' },
   rowOdd: { background: '#f8fafc' },
+  pagination: { display: 'flex', justifyContent: 'center', gap: 8, padding: 16, alignItems: 'center' },
   pageRow: { display: 'flex', justifyContent: 'center', gap: 8, padding: 16, alignItems: 'center' },
   pageBtn: { padding: '6px 12px', borderRadius: 6, border: '1px solid #cbd5e1', background: '#ffffff', color: '#3b82f6', cursor: 'pointer', fontSize: 13 },
   pageInfo: { color: '#64748b', fontSize: 13 },
