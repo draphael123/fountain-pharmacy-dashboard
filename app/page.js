@@ -60,11 +60,11 @@ export default function Dashboard() {
       Promise.resolve([]),
       fetch('/changelog.json').then(r => r.ok ? r.json() : null).catch(() => null),
       fetch('/summary.json').then(r => r.json()),
-    ]).then(([dRes, dispRes, sRes]) => {
+    ]).then(([dRes, dispRes, clRes, sRes]) => {
       if (dRes.status === 'fulfilled') setData(decodePharmacyData(dRes.value))
       // routing variations computed below
       if (clRes && clRes.status === 'fulfilled' && clRes.value) setChangelog(clRes.value)
-      if (sRes.status === 'fulfilled') setSummary(sRes.value)
+      if (sRes && sRes.status === 'fulfilled') setSummary(sRes.value)
       setLoading(false)
     }).catch(e => {
       setLoadError(e.message)
