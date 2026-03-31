@@ -8,6 +8,7 @@ const PROGRAM_LABELS = {
 }
 
 const PLAN_OPTIONS = ['4wk', '8wk', '12wk', '48wk']
+function sortPlans(arr) { return arr.slice().sort(function(a, b) { var ai = PLAN_OPTIONS.indexOf(a), bi = PLAN_OPTIONS.indexOf(b); return (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi) }) }
 const SORT_KEYS = ['sex','program','medication','drug','dosage','frequency','pharmacy','med_code','supply_code','payment_plan']
 
 function decodePharmacyData(raw) {
@@ -251,7 +252,7 @@ export default function Dashboard() {
       stats[p].records++
     }
     return Object.values(stats).map(function(s) {
-      return { name: s.name, meds: s.meds.size, programs: Array.from(s.programs).sort(), plans: Array.from(s.plans).filter(Boolean).sort(), records: s.records, states: s.states.size }
+      return { name: s.name, meds: s.meds.size, programs: Array.from(s.programs).sort(), plans: sortPlans(Array.from(s.plans).filter(Boolean)), records: s.records, states: s.states.size }
     }).sort(function(a, b) { return b.records - a.records })
   }, [data])
 
@@ -363,7 +364,7 @@ export default function Dashboard() {
     }
     return Object.values(groups).map(g => ({
       ...g,
-      entries: Object.values(g.entries).map(e => ({ ...e, plans: Array.from(e.plans).sort(), states: Array.from(e.states).sort() }))
+      entries: Object.values(g.entries).map(e => ({ ...e, plans: sortPlans(Array.from(e.plans)), states: Array.from(e.states).sort() }))
     }))
   }, [data, lookupQuery])
 
@@ -661,7 +662,7 @@ export default function Dashboard() {
                       <td style={styles.td}>{r.pharmacy}</td>
                       <td style={{...styles.td, fontFamily: 'monospace'}}>{r.med_code}</td>
                       <td style={{...styles.td, fontFamily: 'monospace'}}>{r.supply_code}</td>
-                      <td style={styles.td}>{r._plans ? r._plans.sort().join(', ') : r.payment_plan}</td>
+                      <td style={styles.td}>{r._plans ? sortPlans(r._plans).join(', ') : r.payment_plan}</td>
                     </tr>
                     {isExpanded && (
                       <tr style={{ background: '#f0f7ff' }}>
