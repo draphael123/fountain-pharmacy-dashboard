@@ -22,6 +22,7 @@ const PROGRAM_LABELS = {
 }
 
 const CHANGELOG = [
+  { date: '2026-04-27', notes: 'Fixed emoji rendering, filtered disparities to only show pharmacy/supply code differences (excluded billing code noise)' },
   { date: '2026-04-27', notes: 'Added CSV export, column sorting, multi-select filters, and pharmacy comparison view' },
   { date: '2026-04-21', notes: 'Initial launch with medication catalog, disparity analysis, and quick lookup' },
 ]
